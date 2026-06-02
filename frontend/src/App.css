@@ -1,0 +1,187 @@
+.logo {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0;
+  padding: 0 16px;
+}
+
+.dashboard {
+  padding: 0;
+}
+
+.ant-card {
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.ant-card-head {
+  border-bottom: 1px solid #f0f0f0;
+  font-weight: 500;
+}
+
+.ant-statistic-title {
+  color: #666;
+  font-size: 14px;
+}
+
+.ant-statistic-content {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+/* 港股红色涨绿色跌 */
+.hongkong-stock .up {
+  color: #cf1322;
+}
+
+.hongkong-stock .down {
+  color: #3f8600;
+}
+
+/* Agent消息样式 */
+.agent-message {
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+}
+
+.agent-message.market {
+  background: #e6f7ff;
+  border-color: #91d5ff;
+}
+
+.agent-message.risk {
+  background: #fff1f0;
+  border-color: #ffa39e;
+}
+
+.agent-message.portfolio {
+  background: #f6ffed;
+  border-color: #b7eb8f;
+}
+
+.agent-message.sentiment {
+  background: #fffbe6;
+  border-color: #ffe58f;
+}
+
+/* 图表容器 */
+.chart-container {
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+}
+
+/* 响应式布局 */
+@media (max-width: 1200px) {
+  .ant-col {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+/* 加载动画 */
+.loading-spin {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  min-height: 200px;
+}
+
+/* 标签样式 */
+.risk-tag {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.risk-tag.low {
+  background: #f6ffed;
+  color: #52c41a;
+  border: 1px solid #b7eb8f;
+}
+
+.risk-tag.medium {
+  background: #fffbe6;
+  color: #faad14;
+  border: 1px solid #ffe58f;
+}
+
+.risk-tag.high {
+  background: #fff1f0;
+  color: #f5222d;
+  border: 1px solid #ffa39e;
+}
+
+/* 侧边栏菜单 */
+.ant-layout-sider {
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+}
+
+.ant-menu-dark {
+  background: #001529;
+}
+
+.ant-menu-dark .ant-menu-item-selected {
+  background: #1890ff;
+}
+
+/* 头部样式 */
+.ant-layout-header {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  z-index: 1;
+}
+
+/* 内容区域 */
+.ant-layout-content {
+  overflow-y: auto;
+}
+
+/* 卡片悬停效果 */
+.ant-card-hoverable:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  transition: all 0.3s ease;
+}
+
+/* 按钮样式 */
+.ant-btn-primary {
+  background: #1890ff;
+  border-color: #1890ff;
+}
+
+.ant-btn-primary:hover {
+  background: #40a9ff;
+  border-color: #40a9ff;
+}
+
+/* 选择器样式 */
+.ant-select-selector {
+  border-radius: 4px !important;
+}
+
+/* 列表样式 */
+.ant-list-item {
+  padding: 16px 0;
+}
+
+.ant-list-item-meta-title {
+  font-weight: 500;
+}
+
+/* Tab样式 */
+.ant-tabs-tab {
+  font-weight: 500;
+}
+
+.ant-tabs-tab-active {
+  color: #1890ff;
+}

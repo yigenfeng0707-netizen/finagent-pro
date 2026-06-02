@@ -1,0 +1,31 @@
+# Agent框架
+crewai==0.86.0
+langchain==0.3.0
+langchain-openai==0.2.0
+
+# 后端
+fastapi==0.115.0
+uvicorn==0.32.0
+pydantic==2.10.0
+python-multipart==0.0.12
+
+# 金融数据
+akshare>=1.15.0
+pandas>=2.2.0
+numpy>=1.26.0
+
+# 向量数据库
+chromadb>=0.5.0
+
+# 工具
+httpx>=0.27.0
+python-dotenv>=1.0.0
+requests>=2.32.0
+aiohttp>=3.9.0
+
+# 新闻数据
+finnhub-python>=2.4.0
+
+# 其他
+pydantic-settings>=2.5.0
+loguru>=0.7.0
