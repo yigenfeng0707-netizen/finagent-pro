@@ -1,6 +1,3 @@
-"""
-Agents模块 - 多Agent智能投顾系统
-"""
 from .base_agent import BaseAgent
 from .market_analyst import MarketAnalyst
 from .risk_manager import RiskManager

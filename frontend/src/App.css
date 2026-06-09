@@ -185,3 +185,73 @@
 .ant-tabs-tab-active {
   color: #1890ff;
 }
+
+/* 数字员工工作台 */
+.workbench-card {
+  border-radius: 8px;
+}
+
+.workbench-card .ant-table-thead > tr > th {
+  background: #fafafa;
+  font-size: 12px;
+}
+
+/* Agent思考面板动画 */
+.thinking-step-enter {
+  opacity: 0;
+  transform: translateX(-10px);
+}
+
+.thinking-step-enter-active {
+  opacity: 1;
+  transform: translateX(0);
+  transition: all 0.3s ease;
+}
+
+/* LiveAgentFeed 自定义滚动条 */
+.live-feed-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.live-feed-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.live-feed-container::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 3px;
+}
+
+/* WebSocket状态指示器 */
+.ws-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.ws-indicator.connected {
+  background: #52c41a;
+  box-shadow: 0 0 6px rgba(82, 196, 26, 0.6);
+}
+
+.ws-indicator.disconnected {
+  background: #d9d9d9;
+}
+
+.ws-indicator.connecting {
+  background: #faad14;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* 侧边栏间距 */
+.ant-layout-sider .ant-menu-item {
+  margin: 4px 8px !important;
+  border-radius: 6px;
+}

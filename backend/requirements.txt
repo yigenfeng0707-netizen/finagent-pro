@@ -26,6 +26,12 @@ aiohttp>=3.9.0
 # 新闻数据
 finnhub-python>=2.4.0
 
+# 测试
+pytest>=8.0.0
+
+# WebSocket
+websockets>=12.0
+
 # 其他
 pydantic-settings>=2.5.0
 loguru>=0.7.0

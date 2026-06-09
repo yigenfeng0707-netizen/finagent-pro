@@ -1,7 +1,7 @@
 """
 金融知识库 - RAG检索增强
 """
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import chromadb
 from chromadb.config import Settings
 import os
@@ -19,21 +19,31 @@ class FinanceKnowledgeBase:
         """
         self.persist_dir = persist_dir
         os.makedirs(persist_dir, exist_ok=True)
-        
-        # 初始化Chroma客户端
-        self.client = chromadb.Client(Settings(
-            persist_directory=persist_dir,
+        self._client: Optional[Any] = None
+        self._collection: Optional[Any] = None
+    
+    def _ensure_initialized(self):
+        if self._client is not None:
+            return
+        self._client = chromadb.Client(Settings(
+            persist_directory=self.persist_dir,
             anonymized_telemetry=False
         ))
-        
-        # 获取或创建集合
-        self.collection = self.client.get_or_create_collection(
+        self._collection = self._client.get_or_create_collection(
             name="finance_knowledge",
             metadata={"description": "金融投资知识库"}
         )
-        
-        # 初始化知识库
         self._init_knowledge()
+    
+    @property
+    def client(self):
+        self._ensure_initialized()
+        return self._client
+    
+    @property
+    def collection(self):
+        self._ensure_initialized()
+        return self._collection
     
     def _init_knowledge(self):
         """初始化金融知识"""
