@@ -1,0 +1,10 @@
+INFO:     Will watch for changes in these directories: ['D:\\AliAntFin\\backend']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [10424] using WatchFiles
+ERROR:root:Failed to get supported params: argument of type 'NoneType' is not iterable
+ERROR:root:Failed to get supported params: argument of type 'NoneType' is not iterable
+ERROR:root:Failed to get supported params: argument of type 'NoneType' is not iterable
+ERROR:root:Failed to get supported params: argument of type 'NoneType' is not iterable
+INFO:     Started server process [32344]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.

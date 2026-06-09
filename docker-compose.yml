@@ -1,6 +1,36 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: finagent
+      POSTGRES_PASSWORD: finagent123
+      POSTGRES_DB: finagent_pro
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finagent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: .
@@ -11,16 +41,61 @@ services:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - ZHIPU_API_KEY=${ZHIPU_API_KEY}
       - FINNHUB_API_KEY=${FINNHUB_API_KEY}
+      - DATABASE_URL=postgresql+asyncpg://finagent:finagent123@postgres:5432/finagent_pro
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - ENV=production
+      - ALLOWED_ORIGINS=https://finagent.example.com
+      - JWT_SECRET=${JWT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./backend/cache:/app/backend/cache
       - ./backend/chroma_db:/app/backend/chroma_db
       - ./backend/memory_store:/app/backend/memory_store
     restart: unless-stopped
     healthcheck:
-      test: ["GET", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    command: celery -A tasks.celery_app worker -l info -c 4
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - ZHIPU_API_KEY=${ZHIPU_API_KEY}
+      - DATABASE_URL=postgresql+asyncpg://finagent:finagent123@postgres:5432/finagent_pro
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/cache:/app/backend/cache
+      - ./backend/chroma_db:/app/backend/chroma_db
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
 
   frontend:
     build:
@@ -32,3 +107,11 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+volumes:
+  pgdata:
+  redis-data:

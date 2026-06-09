@@ -6,6 +6,7 @@ import os
 import asyncio
 import uuid
 from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 
 from models.schemas import (
     ChatRequest, StockAnalysisRequest, PortfolioRequest,
@@ -16,22 +17,48 @@ from services.market_data import MarketDataService
 from knowledge.finance_kb import FinanceKnowledgeBase
 from orchestrator import AgentOrchestrator
 from websocket_manager import WebSocketManager
+from auth.routes import router as auth_router
+from middleware import rate_limit_middleware
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from database import engine, Base
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    await engine.dispose()
+
 
 load_dotenv()
+
+ENV = os.getenv("ENV", "development")
+ALLOWED_ORIGINS = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:3000,http://localhost:8000,https://finagent.example.com"
+).split(",")
 
 app = FastAPI(
     title="FinAgent Pro - AFAC2026",
     description="多Agent智能投顾系统 | AFAC2026金融智能创新大赛 方向四: Agentic AI",
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=lifespan,
+    docs_url="/docs" if ENV != "production" else None,
+    redoc_url="/redoc" if ENV != "production" else None,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-API-Key"],
+    expose_headers=["X-Request-ID", "X-RateLimit-Remaining"],
 )
+
+app.middleware("http")(rate_limit_middleware)
+
+app.include_router(auth_router)
 
 market_service = MarketDataService()
 finance_kb = FinanceKnowledgeBase()
@@ -65,7 +92,35 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    db_ok, redis_ok = True, True
+    try:
+        from database import AsyncSessionLocal
+        async with AsyncSessionLocal() as sess:
+            await sess.execute(db.text("SELECT 1"))
+    except Exception:
+        db_ok = False
+
+    try:
+        import redis.asyncio as aioredis
+        r = await aioredis.from_url(
+            os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+            socket_connect_timeout=2
+        )
+        await r.ping()
+        await r.aclose()
+    except Exception:
+        redis_ok = False
+
+    return {
+        "status": "healthy" if db_ok else "degraded",
+        "version": "2.0.0",
+        "env": os.getenv("ENV", "development"),
+        "checks": {
+            "database": "ok" if db_ok else "fail",
+            "redis": "ok" if redis_ok else "fail",
+            "chromadb": "ok" if finance_kb._collection is not None else "lazy",
+        }
+    }
 
 
 @app.post("/api/orchestrate", response_model=OrchestratorResponse)
