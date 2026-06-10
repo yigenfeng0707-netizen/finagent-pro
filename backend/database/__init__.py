@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator
 import os
 
 
@@ -20,8 +20,11 @@ _AsyncSessionLocal = None
 def get_engine():
     global _engine
     if _engine is None:
-        from sqlalchemy.ext.asyncio import create_async_engine
-        _engine = create_async_engine(DATABASE_URL, echo=False, pool_size=10, max_overflow=20)
+        kwargs = {"echo": False}
+        if DATABASE_URL.startswith("postgresql"):
+            kwargs["pool_size"] = 10
+            kwargs["max_overflow"] = 20
+        _engine = create_async_engine(DATABASE_URL, **kwargs)
     return _engine
 
 
@@ -39,7 +42,3 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             yield session
         finally:
             await session.close()
-
-
-engine = None
-AsyncSessionLocal = None

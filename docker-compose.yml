@@ -5,10 +5,8 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: finagent
-      POSTGRES_PASSWORD: finagent123
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finagent_dev_123}
       POSTGRES_DB: finagent_pro
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
@@ -20,13 +18,12 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redis_dev_123}
     volumes:
       - redis-data:/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_dev_123}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -41,10 +38,10 @@ services:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - ZHIPU_API_KEY=${ZHIPU_API_KEY}
       - FINNHUB_API_KEY=${FINNHUB_API_KEY}
-      - DATABASE_URL=postgresql+asyncpg://finagent:finagent123@postgres:5432/finagent_pro
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DATABASE_URL=postgresql+asyncpg://finagent:${POSTGRES_PASSWORD:-finagent_dev_123}@postgres:5432/finagent_pro
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_dev_123}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-redis_dev_123}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-redis_dev_123}@redis:6379/1
       - ENV=production
       - ALLOWED_ORIGINS=https://finagent.example.com
       - JWT_SECRET=${JWT_SECRET}
@@ -79,10 +76,10 @@ services:
     environment:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - ZHIPU_API_KEY=${ZHIPU_API_KEY}
-      - DATABASE_URL=postgresql+asyncpg://finagent:finagent123@postgres:5432/finagent_pro
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DATABASE_URL=postgresql+asyncpg://finagent:${POSTGRES_PASSWORD:-finagent_dev_123}@postgres:5432/finagent_pro
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_dev_123}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-redis_dev_123}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-redis_dev_123}@redis:6379/1
     depends_on:
       postgres:
         condition: service_healthy

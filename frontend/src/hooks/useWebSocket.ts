@@ -14,47 +14,64 @@ export interface WSOptions {
 }
 
 const WS_BASE = process.env.REACT_APP_WS_URL || `ws://${window.location.hostname}:8000`;
+const MAX_RETRIES = 5;
+const BASE_DELAY = 1000;
 
 export function useWebSocket(sessionId: string | null, options: WSOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
-  const { onMessage, onConnect, onDisconnect, onError, enabled = true } = options;
+  const retryCount = useRef(0);
+  
+  // Store latest callbacks in refs to prevent re-renders
+  const callbacksRef = useRef(options);
+  callbacksRef.current = options;
+
+  const disconnect = useCallback(() => {
+    clearTimeout(reconnectTimer.current);
+    if (wsRef.current) {
+      wsRef.current.onclose = null; // Prevent reconnect on intentional close
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    retryCount.current = 0;
+  }, []);
 
   const connect = useCallback(() => {
-    if (!sessionId || !enabled) return;
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    if (!sessionId || !callbacksRef.current.enabled) return;
+    if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) return;
 
     const url = `${WS_BASE}/ws/${sessionId}`;
     const ws = new WebSocket(url);
 
     ws.onopen = () => {
       wsRef.current = ws;
-      onConnect?.();
+      retryCount.current = 0;
+      callbacksRef.current.onConnect?.();
     };
 
     ws.onmessage = (event) => {
       try {
         const msg: WSMessage = JSON.parse(event.data);
-        onMessage(msg);
+        callbacksRef.current.onMessage(msg);
       } catch { /* ignore parse errors */ }
     };
 
     ws.onclose = () => {
       wsRef.current = null;
-      onDisconnect?.();
-      reconnectTimer.current = setTimeout(connect, 3000);
+      callbacksRef.current.onDisconnect?.();
+      // Exponential backoff with jitter, max retries
+      if (retryCount.current < MAX_RETRIES) {
+        const delay = Math.min(BASE_DELAY * Math.pow(2, retryCount.current), 30000);
+        const jitter = delay * 0.2 * Math.random();
+        retryCount.current += 1;
+        reconnectTimer.current = setTimeout(connect, delay + jitter);
+      }
     };
 
     ws.onerror = (err) => {
-      onError?.(err);
+      callbacksRef.current.onError?.(err);
     };
-  }, [sessionId, enabled, onMessage, onConnect, onDisconnect, onError]);
-
-  const disconnect = useCallback(() => {
-    clearTimeout(reconnectTimer.current);
-    wsRef.current?.close();
-    wsRef.current = null;
-  }, []);
+  }, [sessionId]);
 
   useEffect(() => {
     connect();

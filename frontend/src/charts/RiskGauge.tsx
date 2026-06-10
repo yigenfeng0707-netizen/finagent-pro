@@ -18,7 +18,10 @@ const RiskGauge: React.FC<RiskGaugeProps> = ({
   useEffect(() => {
     if (!chartRef.current) return;
 
-    chartInstance.current = echarts.init(chartRef.current);
+    // Initialize chart only once
+    if (!chartInstance.current) {
+      chartInstance.current = echarts.init(chartRef.current);
+    }
 
     // 根据风险值确定颜色和标签
     let riskLabel = '低风险';
@@ -147,7 +150,7 @@ const RiskGauge: React.FC<RiskGaugeProps> = ({
       ]
     };
 
-    chartInstance.current.setOption(option);
+    chartInstance.current.setOption(option, true); // true = replace mode
 
     const handleResize = () => {
       chartInstance.current?.resize();
@@ -157,9 +160,16 @@ const RiskGauge: React.FC<RiskGaugeProps> = ({
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      chartInstance.current?.dispose();
     };
   }, [value, title]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      chartInstance.current?.dispose();
+      chartInstance.current = null;
+    };
+  }, []);
 
   return (
     <div 

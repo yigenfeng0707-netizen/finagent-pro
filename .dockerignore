@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+.env.*
+*.md
+.vscode
+.idea
+frontend/node_modules
+backend/__pycache__
+**/__pycache__
+*.pyc
+backend/cache
+backend/chroma_db
+backend/memory_store
+.github

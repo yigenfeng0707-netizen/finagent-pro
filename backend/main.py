@@ -1,12 +1,14 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 import uvicorn
 import os
 import asyncio
 import uuid
+import pandas as pd
+import sqlalchemy as db
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
+from loguru import logger
 
 from models.schemas import (
     ChatRequest, StockAnalysisRequest, PortfolioRequest,
@@ -23,7 +25,8 @@ from middleware import rate_limit_middleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from database import engine, Base
+    from database import get_engine, Base
+    engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
@@ -94,8 +97,8 @@ async def root():
 async def health_check():
     db_ok, redis_ok = True, True
     try:
-        from database import AsyncSessionLocal
-        async with AsyncSessionLocal() as sess:
+        from database import get_session_maker
+        async with get_session_maker()() as sess:
             await sess.execute(db.text("SELECT 1"))
     except Exception:
         db_ok = False
@@ -137,15 +140,19 @@ async def orchestrate(request: OrchestratorRequest):
         async def on_message(msg):
             await ws_manager.broadcast(session_id, msg)
 
-        orchestrator.on_progress(on_message)
+        orchestrator.on_progress(session_id, on_message)
 
-        async for msg in orchestrator.run(
-            symbols=request.symbols,
-            investment_amount=request.investment_amount,
-            risk_preference=request.risk_preference,
-            market=request.market
-        ):
-            agent_messages.append(msg)
+        try:
+            async for msg in orchestrator.run(
+                symbols=request.symbols,
+                investment_amount=request.investment_amount,
+                risk_preference=request.risk_preference,
+                market=request.market,
+                session_id=session_id
+            ):
+                agent_messages.append(msg)
+        finally:
+            orchestrator.remove_progress(session_id)
 
         context = _build_sync_context(agent_messages, request)
         report = orchestrator.synthesize_report(context)
@@ -208,15 +215,19 @@ async def chat(request: ChatRequest):
         async def on_message(msg):
             await ws_manager.broadcast(session_id, msg)
 
-        orchestrator.on_progress(on_message)
+        orchestrator.on_progress(session_id, on_message)
 
-        async for agent_msg in orchestrator.run(
-            symbols=symbols,
-            investment_amount=100000,
-            risk_preference=risk_pref,
-            market="hk"
-        ):
-            agent_messages.append(agent_msg)
+        try:
+            async for agent_msg in orchestrator.run(
+                symbols=symbols,
+                investment_amount=100000,
+                risk_preference=risk_pref,
+                market="hk",
+                session_id=session_id
+            ):
+                agent_messages.append(agent_msg)
+        finally:
+            orchestrator.remove_progress(session_id)
 
         req_obj = type('req', (), {
             'symbols': symbols, 'risk_preference': risk_pref,
@@ -285,10 +296,10 @@ async def analyze_risk(request: RiskAnalysisRequest):
 async def get_stock_history(symbol: str, market: str = "hk", days: int = 180):
     """获取股票历史数据"""
     try:
-        df = market_service.get_stock_history(symbol, market, days=days)
+        df = await asyncio.to_thread(market_service.get_stock_history, symbol, market, days=days)
         if df is None or df.empty:
             raise HTTPException(status_code=404, detail="股票数据未找到")
-        df = market_service.calculate_technical_indicators(df)
+        indicators = market_service.calculate_technical_indicators(df)  # modifies df in-place, returns Dict summary
         data = {
             "dates": df['日期'].dt.strftime('%Y-%m-%d').tolist() if '日期' in df.columns else df.index.strftime('%Y-%m-%d').tolist(),
             "prices": df['收盘'].tolist() if '收盘' in df.columns else df['close'].tolist(),
@@ -296,7 +307,8 @@ async def get_stock_history(symbol: str, market: str = "hk", days: int = 180):
         }
         for col in ['MA5', 'MA10', 'MA20', 'MA60']:
             if col in df.columns:
-                data[col.lower()] = df[col].tolist()
+                data[col.lower()] = [None if pd.isna(v) else round(float(v), 2) for v in df[col].tolist()]
+        data["indicators"] = indicators
         return {"status": "success", "symbol": symbol, "market": market, "data": data}
     except HTTPException:
         raise
@@ -309,7 +321,7 @@ async def get_hk_spot():
     """港股实时行情"""
     try:
         import akshare as ak
-        df = ak.stock_hk_spot_em()
+        df = await asyncio.to_thread(ak.stock_hk_spot_em)
         stocks = df.head(20).to_dict(orient='records')
         return {"success": True, "data": stocks}
     except Exception as e:
@@ -320,7 +332,7 @@ async def get_hk_spot():
 async def get_hot_stocks(market: str = "hk"):
     """热门股票"""
     try:
-        stocks = market_service.get_hot_stocks(market)
+        stocks = await asyncio.to_thread(market_service.get_hot_stocks, market)
         return {"status": "success", "market": market, "data": stocks}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -340,7 +352,7 @@ async def query_knowledge(query: str, top_k: int = 3):
 if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
-    print(f"FinAgent Pro v2.0.0 启动中... (AFAC2026 方向四: Agentic AI)")
-    print(f"服务地址: http://{host}:{port}")
-    print(f"API文档: http://{host}:{port}/docs")
+    logger.info(f"FinAgent Pro v2.0.0 启动中... (AFAC2026 方向四: Agentic AI)")
+    logger.info(f"服务地址: http://{host}:{port}")
+    logger.info(f"API文档: http://{host}:{port}/docs")
     uvicorn.run(app, host=host, port=port)

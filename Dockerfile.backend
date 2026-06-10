@@ -2,31 +2,23 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ \
-    crewai==0.86.0 \
-    langchain==0.3.0 \
-    langchain-openai==0.2.0 \
-    fastapi==0.115.0 \
-    uvicorn==0.32.0 \
-    pydantic==2.10.0 \
-    python-multipart==0.0.12 \
-    akshare>=1.15.0 \
-    pandas>=2.2.0 \
-    numpy>=1.26.0 \
-    chromadb>=0.5.0 \
-    httpx>=0.27.0 \
-    python-dotenv>=1.0.0 \
-    requests>=2.32.0 \
-    aiohttp>=3.9.0 \
-    pydantic-settings>=2.5.0 \
-    loguru>=0.7.0 \
-    websockets>=12.0
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
+# Copy requirements first for layer caching
+COPY backend/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r /app/requirements.txt
+
+# Copy application code
 COPY backend/ /app/backend/
-COPY .env /app/.env
+
+# Create non-root user
+RUN groupadd -r finagent && useradd -r -g finagent -d /app -s /sbin/nologin finagent \
+    && chown -R finagent:finagent /app
+USER finagent
 
 WORKDIR /app/backend
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

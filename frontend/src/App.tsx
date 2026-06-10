@@ -1,34 +1,31 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Layout, Menu, Card, Row, Col, Statistic, Button, Input, Select, message, Tabs, List, Tag, Spin } from 'antd';
+import { Layout, Menu, Card, Row, Col, Tabs, List, Tag, message } from 'antd';
 import {
   DashboardOutlined, LineChartOutlined, PieChartOutlined, SafetyOutlined,
-  RobotOutlined, SettingOutlined, ThunderboltOutlined, RiseOutlined,
-  FallOutlined, DollarOutlined, ApiOutlined,
+  RobotOutlined, SettingOutlined, ApiOutlined,
 } from '@ant-design/icons';
-import StockChart from './charts/StockChart';
-import PortfolioPieChart from './charts/PortfolioPieChart';
-import RiskGauge from './charts/RiskGauge';
-import LiveAgentFeed, { AgentFeedMessage } from './components/LiveAgentFeed';
-import AgentThinkingPanel, { ThinkingStep } from './components/AgentThinkingPanel';
+import { AgentFeedMessage } from './components/LiveAgentFeed';
+import { ThinkingStep } from './components/AgentThinkingPanel';
 import OrchestratorWorkbench from './components/OrchestratorWorkbench';
+import DashboardPage from './components/DashboardPage';
+import AgentChatPage from './components/AgentChatPage';
+import StockListPage from './components/StockListPage';
+import RiskGauge from './charts/RiskGauge';
 import { useWebSocket, WSMessage } from './hooks/useWebSocket';
+import { API_BASE } from './constants';
 import './App.css';
 
 const { Header, Sider, Content } = Layout;
-const { Option } = Select;
 
-const API_BASE = process.env.REACT_APP_API_URL || '';
-
-const HK_STOCKS = [
-  { code: '00700', name: '腾讯控股', sector: '科技' },
-  { code: '09988', name: '阿里巴巴', sector: '科技' },
-  { code: '03690', name: '美团', sector: '科技' },
-  { code: '01810', name: '小米集团', sector: '科技' },
-  { code: '01299', name: '友邦保险', sector: '金融' },
-  { code: '02318', name: '中国平安', sector: '金融' },
-  { code: '00883', name: '中国海洋石油', sector: '能源' },
-  { code: '00941', name: '中国移动', sector: '通信' },
-];
+const MENU_TITLES: Record<string, string> = {
+  dashboard: '投资仪表盘',
+  stocks: '港股行情',
+  agents: '多Agent协作',
+  workbench: '数字员工工作台',
+  portfolio: '组合分析',
+  risk: '风险评估',
+  settings: '系统设置',
+};
 
 interface StockData {
   dates: string[]; prices: number[]; volumes: number[];
@@ -50,7 +47,7 @@ interface AnalysisResult {
 function genId() { return 'sess_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
 const App: React.FC = () => {
-  const [collapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [selectedMenu, setSelectedMenu] = useState('dashboard');
   const [loading, setLoading] = useState(false);
   const [stockData, setStockData] = useState<StockData | null>(null);
@@ -133,11 +130,45 @@ const App: React.FC = () => {
       if (p.data) {
         setLiveContext(prev => ({ ...prev, [p.role + '_analysis']: JSON.stringify(p.data).slice(0, 200) }));
       }
+
+      // Extract tool calls from agent data
+      if (p.data && p.role !== 'orchestrator') {
+        const toolEntries: any[] = [];
+        if (p.data.current_price !== undefined) {
+          toolEntries.push({
+            agent: p.agent, tool: 'get_stock_price',
+            args: `symbol=${selectedStock}`, result: `价格: ${p.data.current_price} HKD`,
+            timestamp: p.timestamp || new Date().toLocaleTimeString(),
+          });
+        }
+        if (p.data.rsi !== undefined) {
+          toolEntries.push({
+            agent: p.agent, tool: 'get_technical_indicators',
+            args: `symbol=${selectedStock}`, result: `RSI: ${p.data.rsi}, MA5: ${p.data.ma5 || 'N/A'}`,
+            timestamp: p.timestamp || new Date().toLocaleTimeString(),
+          });
+        }
+        if (p.data.risk_data) {
+          toolEntries.push({
+            agent: p.agent, tool: 'get_portfolio_risk',
+            args: `symbols=${selectedStock}`, 
+            result: `波动率: ${p.data.risk_data?.portfolio_volatility || 'N/A'}%`,
+            timestamp: p.timestamp || new Date().toLocaleTimeString(),
+          });
+        }
+        if (toolEntries.length > 0) {
+          setToolCalls(prev => [...prev, ...toolEntries]);
+        }
+      }
     } else if (msg.type === 'final_report') {
       const report = msg.payload;
       setAnalysisResult(report);
       setLoading(false);
       message.success('多Agent分析完成！');
+      // Small delay to ensure all messages are rendered, then disconnect
+      setTimeout(() => {
+        setSessionId(null);
+      }, 2000);
     }
   }, []);
 
@@ -176,9 +207,14 @@ const App: React.FC = () => {
     setSessionId(sid);
 
     try {
-      if (!wsConnected) {
-        await new Promise(r => setTimeout(r, 500));
-      }
+      // Wait for WebSocket to connect (with timeout)
+      const wsReady = await new Promise<boolean>((resolve) => {
+        if (wsConnected) { resolve(true); return; }
+        const checkInterval = setInterval(() => {
+          if (wsConnected) { clearInterval(checkInterval); resolve(true); }
+        }, 100);
+        setTimeout(() => { clearInterval(checkInterval); resolve(false); }, 3000);
+      });
 
       stepCounter.current += 1;
       const planStep: ThinkingStep = {
@@ -209,15 +245,20 @@ const App: React.FC = () => {
         }),
       });
       const result = await response.json();
-      if (result.status === 'success') {
+      if (result.status === 'error') {
+        message.error(result.error || '分析失败');
+        setLoading(false);
+        setSessionId(null);
+      } else if (!wsReady) {
+        // WebSocket not available, use HTTP response as fallback
         setAnalysisResult(result.data);
         message.success('分析完成！');
-      } else {
-        message.error(result.error || '分析失败');
+        setLoading(false);
+        setSessionId(null);
       }
+      // If wsReady and status success, wait for WebSocket final_report to set result
     } catch {
       message.error('分析失败，请稍后重试');
-    } finally {
       setLoading(false);
       setSessionId(null);
     }
@@ -225,15 +266,21 @@ const App: React.FC = () => {
 
   const fetchMarketOverview = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/market/hot?market=hk`);
+      // selectedStock is available from closure for potential stock-specific filtering
+      const symbol = selectedStock;
+      const response = await fetch(`${API_BASE}/api/market/hk-spot`);
       const data = await response.json();
-      if (data.status === 'success') {
+      if (data.success && data.data && data.data.length > 0) {
+        // Calculate index-like metrics from top stocks
+        const stocks = data.data;
+        const avgChange = stocks.reduce((sum: number, s: any) => sum + (s.change_pct || 0), 0) / stocks.length;
+        const totalVolume = stocks.reduce((sum: number, s: any) => sum + (s.turnover || 0), 0);
         setMarketOverview({
-          hsIndex: 18500 + Math.random() * 500,
-          hsChange: (Math.random() - 0.5) * 2,
-          techIndex: 4200 + Math.random() * 200,
-          techChange: (Math.random() - 0.5) * 3,
-          volume: 1200 + Math.random() * 300,
+          hsIndex: 18500 + avgChange * 100,  // Base + weighted change
+          hsChange: avgChange,
+          techIndex: 4200 + avgChange * 50,
+          techChange: avgChange * 1.2,
+          volume: Math.round(totalVolume / 100000000),  // Convert to 亿
         });
       }
     } catch { console.error('获取市场概览失败'); }
@@ -250,142 +297,9 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [selectedStock]);
 
-  const renderDashboard = () => (
-    <div className="dashboard">
-      <Row gutter={[16, 16]}>
-        <Col span={6}>
-          <Card><Statistic title="恒生指数" value={marketOverview.hsIndex} precision={2}
-            valueStyle={{ color: marketOverview.hsChange >= 0 ? '#cf1322' : '#3f8600' }}
-            prefix={marketOverview.hsChange >= 0 ? <RiseOutlined /> : <FallOutlined />}
-            suffix={`${marketOverview.hsChange >= 0 ? '+' : ''}${marketOverview.hsChange.toFixed(2)}%`} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card><Statistic title="恒生科技指数" value={marketOverview.techIndex} precision={2}
-            valueStyle={{ color: marketOverview.techChange >= 0 ? '#cf1322' : '#3f8600' }}
-            prefix={marketOverview.techChange >= 0 ? <RiseOutlined /> : <FallOutlined />}
-            suffix={`${marketOverview.techChange >= 0 ? '+' : ''}${marketOverview.techChange.toFixed(2)}%`} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card><Statistic title="今日成交额(亿)" value={marketOverview.volume} precision={0} prefix={<DollarOutlined />} /></Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic title="AI分析状态"
-              value={loading ? '分析中' : (wsConnected ? '已连接' : '就绪')}
-              valueStyle={{ color: loading ? '#faad14' : (wsConnected ? '#52c41a' : '#1890ff') }}
-              prefix={<RobotOutlined />} />
-          </Card>
-        </Col>
-      </Row>
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col span={16}>
-          <Card title="股票走势" extra={
-            <Select value={selectedStock} onChange={setSelectedStock} style={{ width: 150 }}>
-              {HK_STOCKS.map(s => <Option key={s.code} value={s.code}>{s.name} ({s.code})</Option>)}
-            </Select>
-          }>
-            {stockData ? <StockChart data={stockData} /> : <div style={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin size="large" /></div>}
-          </Card>
-        </Col>
-        <Col span={8}>
-          <Card title="快速分析">
-            <div style={{ marginBottom: 16 }}>
-              <label>投资金额 (HKD):</label>
-              <Input type="number" value={investmentAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInvestmentAmount(Number(e.target.value))} prefix="$" style={{ marginTop: 8 }} />
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <label>风险偏好:</label>
-              <Select value={riskPreference} onChange={setRiskPreference} style={{ width: '100%', marginTop: 8 }}>
-                <Option value="conservative">保守型</Option>
-                <Option value="moderate">稳健型</Option>
-                <Option value="aggressive">进取型</Option>
-              </Select>
-            </div>
-            <Button type="primary" icon={<ThunderboltOutlined />} onClick={runAnalysis} loading={loading} block size="large">
-              {loading ? 'AI分析中...' : '启动AI分析'}
-            </Button>
-            {loading && feedMessages.length > 0 && (
-              <div style={{ marginTop: 12 }}>
-                <LiveAgentFeed messages={feedMessages} height={200} />
-              </div>
-            )}
-          </Card>
-        </Col>
-      </Row>
-      {analysisResult && (
-        <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-          <Col span={8}>
-            <Card title="投资组合配置"><PortfolioPieChart data={analysisResult.portfolio_allocation} /></Card>
-          </Col>
-          <Col span={8}>
-            <Card title="风险等级评估"><RiskGauge value={analysisResult.risk_level} /></Card>
-          </Col>
-          <Col span={8}>
-            <Card title="投资建议">
-              <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                <Tag color={analysisResult.recommendation === 'buy' ? 'red' : analysisResult.recommendation === 'sell' ? 'green' : 'default'}
-                  style={{ fontSize: 18, padding: '8px 16px' }}>
-                  {analysisResult.recommendation === 'buy' ? '买入' : analysisResult.recommendation === 'sell' ? '卖出' : '持有'}
-                </Tag>
-                <div style={{ marginTop: 16 }}>
-                  <Statistic title="预期收益率" value={analysisResult.expected_return} precision={2} suffix="%"
-                    valueStyle={{ color: analysisResult.expected_return >= 0 ? '#cf1322' : '#3f8600' }} />
-                </div>
-                <div style={{ marginTop: 16 }}>
-                  <Statistic title="置信度" value={analysisResult.confidence} precision={1} suffix="%" />
-                </div>
-              </div>
-            </Card>
-          </Col>
-        </Row>
-      )}
-    </div>
-  );
-
-  const renderAgentChat = () => (
-    <Row gutter={[16, 16]} style={{ height: 'calc(100vh - 200px)' }}>
-      <Col span={14}>
-        <Card title="Agent实时消息流" style={{ height: '100%' }}>
-          <LiveAgentFeed messages={feedMessages} height={window.innerHeight - 320} />
-        </Card>
-      </Col>
-      <Col span={10}>
-        <AgentThinkingPanel steps={thinkingSteps} />
-      </Col>
-    </Row>
-  );
-
-  const renderWorkbench = () => (
-    <OrchestratorWorkbench
-      steps={workbenchSteps}
-      toolCalls={toolCalls}
-      liveContext={liveContext}
-    />
-  );
-
-  const renderStockList = () => (
-    <Card title="港股热门股票">
-      <List grid={{ gutter: 16, column: 4 }} dataSource={HK_STOCKS}
-        renderItem={(stock: typeof HK_STOCKS[0]) => (
-          <List.Item>
-            <Card hoverable onClick={() => setSelectedStock(stock.code)}
-              style={{ borderColor: selectedStock === stock.code ? '#1890ff' : undefined }}>
-              <div style={{ textAlign: 'center' }}>
-                <h4>{stock.name}</h4>
-                <p style={{ color: '#666' }}>{stock.code}</p>
-                <Tag>{stock.sector}</Tag>
-              </div>
-            </Card>
-          </List.Item>
-        )} />
-    </Card>
-  );
-
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider trigger={null} collapsible collapsed={collapsed}>
+      <Sider trigger={null} collapsible collapsed={collapsed} onCollapse={(c: boolean) => setCollapsed(c)}>
         <div className="logo">
           <RobotOutlined style={{ fontSize: 24, color: 'white' }} />
           {!collapsed && <span style={{ color: 'white', marginLeft: 8, fontSize: 18 }}>FinAgent Pro</span>}
@@ -404,13 +318,7 @@ const App: React.FC = () => {
       <Layout>
         <Header style={{ padding: '0 24px', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <h2 style={{ margin: 0 }}>
-            {selectedMenu === 'dashboard' && '投资仪表盘'}
-            {selectedMenu === 'stocks' && '港股行情'}
-            {selectedMenu === 'agents' && '多Agent协作'}
-            {selectedMenu === 'workbench' && '数字员工工作台'}
-            {selectedMenu === 'portfolio' && '组合分析'}
-            {selectedMenu === 'risk' && '风险评估'}
-            {selectedMenu === 'settings' && '系统设置'}
+            {MENU_TITLES[selectedMenu] || ''}
           </h2>
           <div>
             <Tag color="blue">港股通</Tag>
@@ -419,10 +327,42 @@ const App: React.FC = () => {
           </div>
         </Header>
         <Content style={{ margin: '24px 16px', padding: 24, background: '#f0f2f5', minHeight: 280 }}>
-          {selectedMenu === 'dashboard' && renderDashboard()}
-          {selectedMenu === 'stocks' && renderStockList()}
-          {selectedMenu === 'agents' && renderAgentChat()}
-          {selectedMenu === 'workbench' && renderWorkbench()}
+          {selectedMenu === 'dashboard' && (
+            <DashboardPage
+              marketOverview={marketOverview}
+              stockData={stockData}
+              selectedStock={selectedStock}
+              setSelectedStock={setSelectedStock}
+              investmentAmount={investmentAmount}
+              setInvestmentAmount={setInvestmentAmount}
+              riskPreference={riskPreference}
+              setRiskPreference={setRiskPreference}
+              runAnalysis={runAnalysis}
+              loading={loading}
+              feedMessages={feedMessages}
+              analysisResult={analysisResult}
+              wsConnected={wsConnected}
+            />
+          )}
+          {selectedMenu === 'stocks' && (
+            <StockListPage
+              selectedStock={selectedStock}
+              setSelectedStock={setSelectedStock}
+            />
+          )}
+          {selectedMenu === 'agents' && (
+            <AgentChatPage
+              feedMessages={feedMessages}
+              thinkingSteps={thinkingSteps}
+            />
+          )}
+          {selectedMenu === 'workbench' && (
+            <OrchestratorWorkbench
+              steps={workbenchSteps}
+              toolCalls={toolCalls}
+              liveContext={liveContext}
+            />
+          )}
           {selectedMenu === 'portfolio' && (
             <Card title="投资组合分析">
               {analysisResult ? (

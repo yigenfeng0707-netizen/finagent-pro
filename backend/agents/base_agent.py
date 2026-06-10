@@ -1,3 +1,4 @@
+import asyncio
 from typing import Optional, Dict, Any, Callable
 from langchain_openai import ChatOpenAI
 from crewai import Agent
@@ -18,11 +19,11 @@ class BaseAgent:
     def register_tool(self, name: str, fn: Callable):
         self._tools[name] = fn
 
-    def call_tool(self, name: str, **kwargs) -> Any:
+    async def call_tool(self, name: str, **kwargs) -> Any:
         fn = self._tools.get(name)
         if not fn:
             return {"error": f"未知工具: {name}"}
-        return fn(**kwargs)
+        return await asyncio.to_thread(fn, **kwargs)
 
     def _create_llm(self, use_backup: bool = False) -> ChatOpenAI:
         if use_backup:
@@ -56,7 +57,7 @@ class BaseAgent:
     async def run_llm(self, prompt: str) -> str:
         try:
             messages = [{"role": "user", "content": prompt}]
-            response = self.llm.invoke(messages)
+            response = await self.llm.ainvoke(messages)
             return response.content if hasattr(response, 'content') else str(response)
         except Exception as e:
             return f"LLM调用失败: {str(e)}"

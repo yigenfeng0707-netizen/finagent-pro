@@ -19,13 +19,19 @@ class AgentOrchestrator:
         self.portfolio_advisor = PortfolioAdvisor()
         self.sentiment_scanner = SentimentScanner()
         self.knowledge_base = FinanceKnowledgeBase()
-        self._progress_callbacks: List[Callable] = []
+        self._progress_callbacks: Dict[str, Callable] = {}
 
-    def on_progress(self, callback: Callable):
-        self._progress_callbacks.append(callback)
+    def on_progress(self, session_id: str, callback: Callable):
+        """注册指定会话的进度回调"""
+        self._progress_callbacks[session_id] = callback
 
-    async def _notify(self, message: AgentMessage):
-        for cb in self._progress_callbacks:
+    def remove_progress(self, session_id: str):
+        """移除指定会话的回调，防止内存泄漏和跨用户数据污染"""
+        self._progress_callbacks.pop(session_id, None)
+
+    async def _notify(self, session_id: str, message: AgentMessage):
+        cb = self._progress_callbacks.get(session_id)
+        if cb:
             if asyncio.iscoroutinefunction(cb):
                 await cb(message)
             else:
@@ -59,7 +65,8 @@ class AgentOrchestrator:
 
     async def run(self, symbols: List[str], investment_amount: float,
                   risk_preference: str = "moderate",
-                  market: str = "hk") -> AsyncIterator[AgentMessage]:
+                  market: str = "hk",
+                  session_id: str = "") -> AsyncIterator[AgentMessage]:
         context = AgentContext(
             user_input=f"分析{'/'.join(symbols)}，{risk_preference}型，{investment_amount}HKD",
             symbols=symbols, risk_preference=risk_preference,
@@ -75,7 +82,7 @@ class AgentOrchestrator:
             data={"plan": [s.description for s in context.plan.steps]}
         )
         yield plan_msg
-        await self._notify(plan_msg)
+        await self._notify(session_id, plan_msg)
 
         symbol_list = [{"symbol": s, "market": market, "weight": 1.0 / len(symbols)} for s in symbols]
 
@@ -87,7 +94,7 @@ class AgentOrchestrator:
             timestamp=datetime.now().strftime("%H:%M:%S")
         )
         yield step1_msg
-        await self._notify(step1_msg)
+        await self._notify(session_id, step1_msg)
 
         ma_result = await self.market_analyst.analyze(
             symbol=symbols[0] if symbols else "00700",
@@ -95,7 +102,7 @@ class AgentOrchestrator:
         )
         context.results["market_analysis"] = ma_result
         yield ma_result
-        await self._notify(ma_result)
+        await self._notify(session_id, ma_result)
 
         # Step 2: 情绪扫描
         step2_msg = AgentMessage(
@@ -105,7 +112,7 @@ class AgentOrchestrator:
             timestamp=datetime.now().strftime("%H:%M:%S")
         )
         yield step2_msg
-        await self._notify(step2_msg)
+        await self._notify(session_id, step2_msg)
 
         ss_result = await self.sentiment_scanner.scan(
             symbol=symbols[0] if symbols else "00700",
@@ -113,7 +120,7 @@ class AgentOrchestrator:
         )
         context.results["sentiment_analysis"] = ss_result
         yield ss_result
-        await self._notify(ss_result)
+        await self._notify(session_id, ss_result)
 
         # Step 3: 风险评估
         step3_msg = AgentMessage(
@@ -123,7 +130,7 @@ class AgentOrchestrator:
             timestamp=datetime.now().strftime("%H:%M:%S")
         )
         yield step3_msg
-        await self._notify(step3_msg)
+        await self._notify(session_id, step3_msg)
 
         rm_result = await self.risk_manager.analyze(
             symbols=symbol_list, context=context.results,
@@ -131,7 +138,7 @@ class AgentOrchestrator:
         )
         context.results["risk_analysis"] = rm_result
         yield rm_result
-        await self._notify(rm_result)
+        await self._notify(session_id, rm_result)
 
         # Step 4: 组合建议
         step4_msg = AgentMessage(
@@ -141,7 +148,7 @@ class AgentOrchestrator:
             timestamp=datetime.now().strftime("%H:%M:%S")
         )
         yield step4_msg
-        await self._notify(step4_msg)
+        await self._notify(session_id, step4_msg)
 
         pa_result = await self.portfolio_advisor.advise(
             risk_profile=risk_preference,
@@ -153,7 +160,7 @@ class AgentOrchestrator:
         )
         context.results["final_advice"] = pa_result
         yield pa_result
-        await self._notify(pa_result)
+        await self._notify(session_id, pa_result)
 
         done_msg = AgentMessage(
             agent="编排器", role=AgentRole.ORCHESTRATOR,
@@ -162,7 +169,7 @@ class AgentOrchestrator:
             timestamp=datetime.now().strftime("%H:%M:%S")
         )
         yield done_msg
-        await self._notify(done_msg)
+        await self._notify(session_id, done_msg)
 
     def synthesize_report(self, context: AgentContext) -> FinalReport:
         ma = context.results.get("market_analysis")
@@ -192,17 +199,33 @@ class AgentOrchestrator:
             reasoning_parts.append(f"【配置建议】{pa.content[:150]}")
 
         recommendation = "hold"
+        confidence = 0.5
         if has_data:
-            recommendation = "buy" if risk_level < 60 else "hold"
+            # 综合多维度生成建议
+            sentiment_score = 50
+            if ss and ss.data:
+                sentiment_score = ss.data.get("fear_greed_index", 50)
+
+            market_bullish = False
+            if ma and ma.content and any(w in ma.content for w in ["买入", "看多", "上涨", "突破"]):
+                market_bullish = True
+
+            if risk_level < 40 and sentiment_score > 55 and market_bullish:
+                recommendation = "buy"
+                confidence = min(0.95, 0.6 + (55 - risk_level) * 0.005 + (sentiment_score - 50) * 0.003)
+            elif risk_level > 70 or sentiment_score < 30:
+                recommendation = "sell"
+                confidence = min(0.90, 0.5 + (risk_level - 70) * 0.005)
+            else:
+                recommendation = "hold"
+                confidence = 0.55 + abs(sentiment_score - 50) * 0.003
 
         return FinalReport(
             recommendation=recommendation,
-            confidence=0.78,
+            confidence=round(confidence, 2),
             risk_level=risk_level,
             expected_return=expected_return,
             reasoning="\n".join(reasoning_parts),
             portfolio_allocation=portfolio_allocation,
-            agent_messages=[
-                ma, ss, rm, pa
-            ] if all([ma, ss, rm, pa]) else []
+            agent_messages=[msg for msg in [ma, ss, rm, pa] if msg is not None]
         )

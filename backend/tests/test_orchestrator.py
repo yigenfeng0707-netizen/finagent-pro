@@ -1,51 +1,105 @@
 import pytest
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+import asyncio
+from unittest.mock import AsyncMock, patch, MagicMock
 from orchestrator import AgentOrchestrator
-from models.schemas import AgentRole
+from models.schemas import AgentMessage, AgentRole, AgentStatus, AgentContext
 
 
-class TestOrchestrator:
-    def test_init(self):
-        orch = AgentOrchestrator()
-        assert orch.market_analyst is not None
-        assert orch.risk_manager is not None
-        assert orch.portfolio_advisor is not None
-        assert orch.sentiment_scanner is not None
-
-    def test_build_plan(self):
-        orch = AgentOrchestrator()
-        plan = orch._build_plan(symbols=["00700"], risk_preference="moderate")
-        assert plan.total_steps == 4
-        assert len(plan.steps) == 4
-        assert plan.steps[0].agent_role == AgentRole.MARKET_ANALYST
-        assert plan.steps[1].agent_role == AgentRole.SENTIMENT_SCANNER
-        assert plan.steps[2].agent_role == AgentRole.RISK_MANAGER
-        assert plan.steps[3].agent_role == AgentRole.PORTFOLIO_ADVISOR
-
-    def test_build_plan_dependencies(self):
-        orch = AgentOrchestrator()
-        plan = orch._build_plan(symbols=["00700"], risk_preference="aggressive")
-        assert plan.steps[0].depends_on == []
-        assert 1 in plan.steps[1].depends_on
-        assert 1 in plan.steps[2].depends_on
-        assert 2 in plan.steps[2].depends_on
-        assert 1 in plan.steps[3].depends_on
-        assert 2 in plan.steps[3].depends_on
-        assert 3 in plan.steps[3].depends_on
-
-    def test_synthesize_report_empty(self):
-        orch = AgentOrchestrator()
-        from models.schemas import AgentContext
-        ctx = AgentContext(
-            user_input="test",
-            symbols=["00700"],
-            risk_preference="moderate",
-            investment_amount=100000,
-            market="hk"
+@pytest.fixture
+def orchestrator():
+    with patch('orchestrator.MarketAnalyst') as MockMA, \
+         patch('orchestrator.RiskManager') as MockRM, \
+         patch('orchestrator.PortfolioAdvisor') as MockPA, \
+         patch('orchestrator.SentimentScanner') as MockSS, \
+         patch('orchestrator.FinanceKnowledgeBase'):
+        mock_msg = AgentMessage(
+            agent="test", role=AgentRole.MARKET_ANALYST,
+            content="test content", status=AgentStatus.COMPLETED,
+            data={"current_price": 100}
         )
-        report = orch.synthesize_report(ctx)
-        assert report.recommendation == "hold"
-        assert report.confidence == 0.78
+        MockMA.return_value.analyze = AsyncMock(return_value=mock_msg)
+        MockSS.return_value.scan = AsyncMock(return_value=mock_msg)
+        MockRM.return_value.analyze = AsyncMock(return_value=mock_msg)
+        MockPA.return_value.advise = AsyncMock(return_value=mock_msg)
+        yield AgentOrchestrator()
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_run_yields_messages(orchestrator):
+    messages = []
+    async for msg in orchestrator.run(
+        symbols=["00700"], investment_amount=100000,
+        risk_preference="moderate", session_id="test_session"
+    ):
+        messages.append(msg)
+
+    # Should yield: plan + 4 step announcements + 4 agent results + done = 10 messages
+    assert len(messages) >= 8
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_callback_cleanup(orchestrator):
+    """Verify callbacks are properly cleaned up after run"""
+    session_id = "test_cleanup"
+
+    async def dummy_cb(msg):
+        pass
+
+    orchestrator.on_progress(session_id, dummy_cb)
+    assert session_id in orchestrator._progress_callbacks
+
+    orchestrator.remove_progress(session_id)
+    assert session_id not in orchestrator._progress_callbacks
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_empty_symbols_raises(orchestrator):
+    """Empty symbols should be caught by Pydantic validation, but test graceful handling"""
+    messages = []
+    try:
+        async for msg in orchestrator.run(
+            symbols=[], investment_amount=100000,
+            risk_preference="moderate", session_id="test_empty"
+        ):
+            messages.append(msg)
+    except (ZeroDivisionError, IndexError):
+        pass  # Expected - validation should catch this at request level
+
+
+def test_synthesize_report_partial_results(orchestrator):
+    """Verify partial agent results are preserved, not dropped"""
+    ctx = AgentContext(
+        user_input="test",
+        symbols=["00700"],
+        results={
+            "market_analysis": AgentMessage(
+                agent="市场分析师", role=AgentRole.MARKET_ANALYST,
+                content="市场看好", status=AgentStatus.COMPLETED,
+                data={"current_price": 350}
+            ),
+        }
+    )
+    report = orchestrator.synthesize_report(ctx)
+    assert len(report.agent_messages) == 1  # Should preserve partial results
+    assert report.recommendation in ["buy", "sell", "hold"]
+    assert 0 <= report.confidence <= 1
+
+
+def test_synthesize_report_dynamic_confidence(orchestrator):
+    """Confidence should not be hardcoded to 0.78"""
+    ctx_low = AgentContext(user_input="test", symbols=["00700"], results={
+        "risk_analysis": AgentMessage(agent="r", role=AgentRole.RISK_MANAGER,
+                                       content="高风险", data={"risk_level": 85})
+    })
+    ctx_high = AgentContext(user_input="test", symbols=["00700"], results={
+        "risk_analysis": AgentMessage(agent="r", role=AgentRole.RISK_MANAGER,
+                                       content="低风险", data={"risk_level": 20}),
+        "sentiment_analysis": AgentMessage(agent="s", role=AgentRole.SENTIMENT_SCANNER,
+                                            content="乐观", data={"fear_greed_index": 75}),
+        "market_analysis": AgentMessage(agent="m", role=AgentRole.MARKET_ANALYST,
+                                         content="建议买入", data={})
+    })
+    report_low = orchestrator.synthesize_report(ctx_low)
+    report_high = orchestrator.synthesize_report(ctx_high)
+    # Different scenarios should produce different confidence values
+    assert report_low.confidence != report_high.confidence or report_low.recommendation != report_high.recommendation

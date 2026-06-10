@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any, Literal
 from enum import Enum
 from datetime import datetime
 
@@ -56,8 +56,8 @@ class AgentContext(BaseModel):
     investment_amount: float = 100000
     market: str = "hk"
     plan: Optional[AnalysisPlan] = None
-    results: Dict[str, Any] = {}
-    errors: List[str] = []
+    results: Dict[str, Any] = Field(default_factory=dict)
+    errors: List[str] = Field(default_factory=list)
 
 
 class FinalReport(BaseModel):
@@ -71,10 +71,10 @@ class FinalReport(BaseModel):
 
 
 class OrchestratorRequest(BaseModel):
-    symbols: List[str]
-    investment_amount: float = 100000
-    risk_preference: str = "moderate"
-    market: str = "hk"
+    symbols: List[str] = Field(..., min_length=1, max_length=10, description="股票代码列表")
+    investment_amount: float = Field(default=100000, gt=0, description="投资金额")
+    risk_preference: Literal["conservative", "moderate", "aggressive"] = "moderate"
+    market: Literal["hk"] = "hk"
     session_id: Optional[str] = None
 
 

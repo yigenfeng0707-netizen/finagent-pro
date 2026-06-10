@@ -2,7 +2,7 @@ from .base_agent import BaseAgent
 from models.schemas import AgentRole, AgentStatus, AgentMessage
 from tools.market_tools import MarketTools
 from typing import Dict, Any, Optional
-import traceback
+from loguru import logger
 
 
 class MarketAnalyst(BaseAgent):
@@ -21,7 +21,7 @@ class MarketAnalyst(BaseAgent):
     async def analyze(self, symbol: str, market: str = "hk",
                       context: Optional[Dict[str, Any]] = None) -> AgentMessage:
         try:
-            indicators = self.call_tool("get_technical_indicators", symbol=symbol, market=market)
+            indicators = await self.call_tool("get_technical_indicators", symbol=symbol, market=market)
             if "error" in indicators:
                 return self.make_message(
                     agent_name="市场分析师",
@@ -86,10 +86,11 @@ class MarketAnalyst(BaseAgent):
             )
 
         except Exception as e:
+            logger.exception("市场分析师执行失败")
             return self.make_message(
                 agent_name="市场分析师",
                 role=AgentRole.MARKET_ANALYST,
-                content=f"分析异常: {traceback.format_exc()}",
+                content=f"市场分析师遇到异常: {type(e).__name__}: {str(e)}",
                 status=AgentStatus.FAILED,
                 data={"error": str(e)}
             )

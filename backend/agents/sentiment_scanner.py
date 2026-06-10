@@ -2,7 +2,7 @@ from .base_agent import BaseAgent
 from models.schemas import AgentRole, AgentStatus, AgentMessage
 from tools.market_tools import MarketTools
 from typing import Dict, Any, Optional
-import traceback
+from loguru import logger
 
 
 class SentimentScanner(BaseAgent):
@@ -21,8 +21,8 @@ class SentimentScanner(BaseAgent):
     async def scan(self, symbol: str, market: str = "hk",
                    context: Optional[Dict[str, Any]] = None) -> AgentMessage:
         try:
-            price_data = self.call_tool("get_stock_price", symbol=symbol, market=market)
-            indicators = self.call_tool("get_technical_indicators", symbol=symbol, market=market)
+            price_data = await self.call_tool("get_stock_price", symbol=symbol, market=market)
+            indicators = await self.call_tool("get_technical_indicators", symbol=symbol, market=market)
 
             rsi = indicators.get("rsi")
             volatility = indicators.get("volatility", 0)
@@ -94,10 +94,11 @@ class SentimentScanner(BaseAgent):
             )
 
         except Exception as e:
+            logger.exception("情绪扫描器执行失败")
             return self.make_message(
                 agent_name="情绪扫描器",
                 role=AgentRole.SENTIMENT_SCANNER,
-                content=f"分析异常: {traceback.format_exc()}",
+                content=f"情绪扫描器遇到异常: {type(e).__name__}: {str(e)}",
                 status=AgentStatus.FAILED,
                 data={"error": str(e)}
             )

@@ -78,8 +78,8 @@
 }
 
 /* 响应式布局 */
-@media (max-width: 1200px) {
-  .ant-col {
+@media (max-width: 768px) {
+  .dashboard .ant-col {
     flex: 0 0 100% !important;
     max-width: 100% !important;
   }

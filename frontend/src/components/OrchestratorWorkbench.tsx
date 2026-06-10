@@ -171,7 +171,7 @@ const OrchestratorWorkbench: React.FC<OrchestratorWorkbenchProps> = ({
             <Table
               dataSource={toolCalls}
               columns={toolColumns}
-              rowKey={(_: unknown, idx: number) => String(idx)}
+              rowKey={(_: unknown, idx?: number) => String(idx ?? 0)}
               pagination={false}
               size="small"
               locale={{ emptyText: <Empty description="暂无工具调用" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}

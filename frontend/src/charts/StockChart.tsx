@@ -21,8 +21,10 @@ const StockChart: React.FC<StockChartProps> = ({ data, title = '股票价格走�
   useEffect(() => {
     if (!chartRef.current) return;
 
-    // 初始化图表
-    chartInstance.current = echarts.init(chartRef.current);
+    // Initialize chart only once
+    if (!chartInstance.current) {
+      chartInstance.current = echarts.init(chartRef.current);
+    }
 
     const option: echarts.EChartsOption = {
       title: {
@@ -164,7 +166,7 @@ const StockChart: React.FC<StockChartProps> = ({ data, title = '股票价格走�
       ]
     };
 
-    chartInstance.current.setOption(option);
+    chartInstance.current.setOption(option, true); // true = replace mode
 
     // 响应式
     const handleResize = () => {
@@ -174,9 +176,16 @@ const StockChart: React.FC<StockChartProps> = ({ data, title = '股票价格走�
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      chartInstance.current?.dispose();
     };
   }, [data, title]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      chartInstance.current?.dispose();
+      chartInstance.current = null;
+    };
+  }, []);
 
   return <div ref={chartRef} style={{ width: '100%', height: `${height}px` }} />;
 };

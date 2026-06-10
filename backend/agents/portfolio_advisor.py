@@ -1,7 +1,7 @@
 from .base_agent import BaseAgent
 from models.schemas import AgentRole, AgentStatus, AgentMessage
 from typing import Dict, Any, Optional, List
-import traceback
+from loguru import logger
 
 
 class PortfolioAdvisor(BaseAgent):
@@ -114,10 +114,11 @@ class PortfolioAdvisor(BaseAgent):
             )
 
         except Exception as e:
+            logger.exception("组合顾问执行失败")
             return self.make_message(
                 agent_name="组合顾问",
                 role=AgentRole.PORTFOLIO_ADVISOR,
-                content=f"分析异常: {traceback.format_exc()}",
+                content=f"组合顾问遇到异常: {type(e).__name__}: {str(e)}",
                 status=AgentStatus.FAILED,
                 data={"error": str(e)}
             )

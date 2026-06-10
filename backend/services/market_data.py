@@ -7,6 +7,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import json
 import os
+from loguru import logger
 
 
 class MarketDataService:
@@ -83,7 +84,7 @@ class MarketDataService:
             return df
             
         except Exception as e:
-            print(f"获取历史数据失败: {e}")
+            logger.warning(f"获取历史数据失败: {e}")
             return pd.DataFrame()
     
     def get_stock_info(self, symbol: str, market: str = "hk") -> Dict[str, Any]:
@@ -198,7 +199,7 @@ class MarketDataService:
             return formatted
             
         except Exception as e:
-            print(f"获取港股行情失败: {e}")
+            logger.warning(f"获取港股行情失败: {e}")
             return []
     
     def get_us_spot(self, limit: int = 20) -> List[Dict]:
@@ -221,7 +222,7 @@ class MarketDataService:
             return formatted
             
         except Exception as e:
-            print(f"获取美股行情失败: {e}")
+            logger.warning(f"获取美股行情失败: {e}")
             return []
     
     def get_hot_stocks(self, market: str = "hk") -> List[Dict]:
@@ -251,7 +252,7 @@ class MarketDataService:
             return formatted
             
         except Exception as e:
-            print(f"获取热门股票失败: {e}")
+            logger.warning(f"获取热门股票失败: {e}")
             return []
     
     def calculate_technical_indicators(self, df: pd.DataFrame) -> Dict[str, Any]:
@@ -311,7 +312,7 @@ class MarketDataService:
             }
             
         except Exception as e:
-            print(f"计算技术指标失败: {e}")
+            logger.warning(f"计算技术指标失败: {e}")
             return {}
 
 

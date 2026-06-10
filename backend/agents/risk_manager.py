@@ -2,7 +2,7 @@ from .base_agent import BaseAgent
 from models.schemas import AgentRole, AgentStatus, AgentMessage
 from tools.market_tools import MarketTools
 from typing import Dict, Any, List, Optional
-import traceback
+from loguru import logger
 
 
 class RiskManager(BaseAgent):
@@ -23,7 +23,7 @@ class RiskManager(BaseAgent):
                       context: Optional[Dict[str, Any]] = None,
                       market_analysis: Optional[AgentMessage] = None) -> AgentMessage:
         try:
-            portfolio_risk = self.call_tool("get_portfolio_risk", symbols=symbols)
+            portfolio_risk = await self.call_tool("get_portfolio_risk", symbols=symbols)
             if "error" in portfolio_risk:
                 return self.make_message(
                     agent_name="风险经理",
@@ -96,10 +96,11 @@ class RiskManager(BaseAgent):
             )
 
         except Exception as e:
+            logger.exception("风险经理执行失败")
             return self.make_message(
                 agent_name="风险经理",
                 role=AgentRole.RISK_MANAGER,
-                content=f"分析异常: {traceback.format_exc()}",
+                content=f"风险经理遇到异常: {type(e).__name__}: {str(e)}",
                 status=AgentStatus.FAILED,
                 data={"error": str(e)}
             )

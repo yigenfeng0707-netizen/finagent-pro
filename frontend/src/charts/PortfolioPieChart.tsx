@@ -24,7 +24,10 @@ const PortfolioPieChart: React.FC<PortfolioPieChartProps> = ({
   useEffect(() => {
     if (!chartRef.current) return;
 
-    chartInstance.current = echarts.init(chartRef.current);
+    // Initialize chart only once
+    if (!chartInstance.current) {
+      chartInstance.current = echarts.init(chartRef.current);
+    }
 
     const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272'];
 
@@ -89,7 +92,7 @@ const PortfolioPieChart: React.FC<PortfolioPieChartProps> = ({
       ]
     };
 
-    chartInstance.current.setOption(option);
+    chartInstance.current.setOption(option, true); // true = replace mode
 
     const handleResize = () => {
       chartInstance.current?.resize();
@@ -98,9 +101,16 @@ const PortfolioPieChart: React.FC<PortfolioPieChartProps> = ({
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      chartInstance.current?.dispose();
     };
   }, [data, title]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      chartInstance.current?.dispose();
+      chartInstance.current = null;
+    };
+  }, []);
 
   return <div ref={chartRef} style={{ width: '100%', height: `${height}px` }} />;
 };

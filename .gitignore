@@ -39,3 +39,15 @@ backend/chroma_db/
 # Temporary files
 *.tmp
 *.temp
+
+# Runtime files
+backend/server.err
+backend/server.log
+backend/request.json
+
+# Memory store
+backend/memory/**
+!backend/memory/__init__.py
+
+# Frontend scripts
+frontend/scripts/
