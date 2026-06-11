@@ -12,9 +12,10 @@ interface StockChartProps {
   };
   title?: string;
   height?: number;
+  recommendation?: string; // 'buy' | 'sell' | 'hold' | undefined
 }
 
-const StockChart: React.FC<StockChartProps> = ({ data, title = '股票价格走势', height = 400 }) => {
+const StockChart: React.FC<StockChartProps> = ({ data, title = '股票价格走势', height = 400, recommendation }) => {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
 
@@ -25,6 +26,8 @@ const StockChart: React.FC<StockChartProps> = ({ data, title = '股票价格走�
     if (!chartInstance.current) {
       chartInstance.current = echarts.init(chartRef.current);
     }
+
+    const currentPrice = data.prices[data.prices.length - 1];
 
     const option: echarts.EChartsOption = {
       title: {
@@ -115,6 +118,16 @@ const StockChart: React.FC<StockChartProps> = ({ data, title = '股票价格走�
           end: 100
         }
       ],
+      toolbox: {
+        show: true,
+        right: 20,
+        top: 5,
+        feature: {
+          saveAsImage: { title: '保存图片' },
+          dataZoom: { title: { zoom: '缩放', back: '还原' } },
+          magicType: { type: ['line', 'bar'], title: { line: '折线', bar: '柱状' } },
+        }
+      },
       series: [
         {
           name: '收盘价',
@@ -130,6 +143,30 @@ const StockChart: React.FC<StockChartProps> = ({ data, title = '股票价格走�
               { offset: 0, color: 'rgba(84, 112, 198, 0.3)' },
               { offset: 1, color: 'rgba(84, 112, 198, 0.05)' }
             ])
+          },
+          markLine: {
+            silent: true,
+            symbol: 'none',
+            lineStyle: { type: 'dashed', width: 1.5 },
+            data: [
+              {
+                yAxis: currentPrice,
+                label: { formatter: `当前价 ${currentPrice.toFixed(2)}`, position: 'insideEndTop' as const },
+                lineStyle: { color: '#1890ff' }
+              },
+              ...(recommendation === 'buy' ? [
+                {
+                  yAxis: currentPrice * 0.95,
+                  label: { formatter: '止损 -5%', position: 'insideEndTop' as const },
+                  lineStyle: { color: '#ff4d4f' }
+                },
+                {
+                  yAxis: currentPrice * 1.10,
+                  label: { formatter: '止盈 +10%', position: 'insideEndTop' as const },
+                  lineStyle: { color: '#52c41a' }
+                }
+              ] : [])
+            ]
           }
         },
         {
@@ -158,10 +195,16 @@ const StockChart: React.FC<StockChartProps> = ({ data, title = '股票价格走�
           type: 'bar',
           xAxisIndex: 1,
           yAxisIndex: 1,
-          data: data.volumes,
-          itemStyle: {
-            color: '#5470c6'
-          }
+          data: data.volumes.map((vol, idx) => ({
+            value: vol,
+            itemStyle: {
+              color: idx === 0
+                ? '#ef5350'
+                : data.prices[idx] >= data.prices[idx - 1]
+                  ? '#ef5350'
+                  : '#26a69a'
+            }
+          }))
         }
       ]
     };
@@ -177,7 +220,7 @@ const StockChart: React.FC<StockChartProps> = ({ data, title = '股票价格走�
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, [data, title]);
+  }, [data, title, recommendation]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -187,7 +230,7 @@ const StockChart: React.FC<StockChartProps> = ({ data, title = '股票价格走�
     };
   }, []);
 
-  return <div ref={chartRef} style={{ width: '100%', height: `${height}px` }} />;
+  return <div ref={chartRef} style={{ width: '100%', height: `${height}px` }} aria-label="股票K线图表" role="img" />;
 };
 
 export default StockChart;

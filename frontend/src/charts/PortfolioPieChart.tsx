@@ -112,7 +112,7 @@ const PortfolioPieChart: React.FC<PortfolioPieChartProps> = ({
     };
   }, []);
 
-  return <div ref={chartRef} style={{ width: '100%', height: `${height}px` }} />;
+  return <div ref={chartRef} style={{ width: '100%', height: `${height}px` }} aria-label="资产配置饼图" role="img" />;
 };
 
 export default PortfolioPieChart;

@@ -8,6 +8,7 @@ from models.schemas import (
 )
 from agents import MarketAnalyst, RiskManager, PortfolioAdvisor, SentimentScanner
 from knowledge.finance_kb import FinanceKnowledgeBase
+from loguru import logger
 
 
 class AgentOrchestrator:
@@ -86,6 +87,25 @@ class AgentOrchestrator:
 
         symbol_list = [{"symbol": s, "market": market, "weight": 1.0 / len(symbols)} for s in symbols]
 
+        # 知识库增强: 为每个Agent注入相关金融知识
+        kb_market = self.knowledge_base.get_context_for_query(
+            f"港股 {symbols[0] if symbols else ''} 市场分析 技术指标", n_results=2
+        )
+        kb_sentiment = self.knowledge_base.get_context_for_query(
+            f"市场情绪 恐慌贪婪 投资心理", n_results=2
+        )
+        kb_risk = self.knowledge_base.get_context_for_query(
+            f"风险管理 止损 VaR 波动率", n_results=2
+        )
+        kb_portfolio = self.knowledge_base.get_context_for_query(
+            f"资产配置 {risk_preference}型投资者 组合优化", n_results=2
+        )
+
+        context.results["_kb_market"] = kb_market
+        context.results["_kb_sentiment"] = kb_sentiment
+        context.results["_kb_risk"] = kb_risk
+        context.results["_kb_portfolio"] = kb_portfolio
+
         # Step 1: 市场分析
         step1_msg = AgentMessage(
             agent="编排器", role=AgentRole.ORCHESTRATOR,
@@ -96,10 +116,21 @@ class AgentOrchestrator:
         yield step1_msg
         await self._notify(session_id, step1_msg)
 
-        ma_result = await self.market_analyst.analyze(
-            symbol=symbols[0] if symbols else "00700",
-            market=market, context=context.results
-        )
+        try:
+            ma_result = await asyncio.wait_for(
+                self.market_analyst.analyze(
+                    symbol=symbols[0] if symbols else "00700",
+                    market=market, context=context.results
+                ), timeout=90
+            )
+        except (asyncio.TimeoutError, Exception) as e:
+            logger.warning(f"市场分析师执行失败: {e}")
+            ma_result = self.market_analyst.make_message(
+                "市场分析师", AgentRole.MARKET_ANALYST,
+                f"市场分析受限: {type(e).__name__}",
+                status=AgentStatus.FAILED,
+                data={"error": str(e)}
+            )
         context.results["market_analysis"] = ma_result
         yield ma_result
         await self._notify(session_id, ma_result)
@@ -114,10 +145,21 @@ class AgentOrchestrator:
         yield step2_msg
         await self._notify(session_id, step2_msg)
 
-        ss_result = await self.sentiment_scanner.scan(
-            symbol=symbols[0] if symbols else "00700",
-            market=market, context=context.results
-        )
+        try:
+            ss_result = await asyncio.wait_for(
+                self.sentiment_scanner.scan(
+                    symbol=symbols[0] if symbols else "00700",
+                    market=market, context=context.results
+                ), timeout=90
+            )
+        except (asyncio.TimeoutError, Exception) as e:
+            logger.warning(f"情绪扫描器执行失败: {e}")
+            ss_result = self.sentiment_scanner.make_message(
+                "情绪扫描器", AgentRole.SENTIMENT_SCANNER,
+                f"情绪分析受限: {type(e).__name__}",
+                status=AgentStatus.FAILED,
+                data={"error": str(e)}
+            )
         context.results["sentiment_analysis"] = ss_result
         yield ss_result
         await self._notify(session_id, ss_result)
@@ -132,10 +174,21 @@ class AgentOrchestrator:
         yield step3_msg
         await self._notify(session_id, step3_msg)
 
-        rm_result = await self.risk_manager.analyze(
-            symbols=symbol_list, context=context.results,
-            market_analysis=ma_result
-        )
+        try:
+            rm_result = await asyncio.wait_for(
+                self.risk_manager.analyze(
+                    symbols=symbol_list, context=context.results,
+                    market_analysis=ma_result
+                ), timeout=90
+            )
+        except (asyncio.TimeoutError, Exception) as e:
+            logger.warning(f"风险经理执行失败: {e}")
+            rm_result = self.risk_manager.make_message(
+                "风险经理", AgentRole.RISK_MANAGER,
+                f"风险评估受限: {type(e).__name__}",
+                status=AgentStatus.FAILED,
+                data={"error": str(e)}
+            )
         context.results["risk_analysis"] = rm_result
         yield rm_result
         await self._notify(session_id, rm_result)
@@ -150,14 +203,25 @@ class AgentOrchestrator:
         yield step4_msg
         await self._notify(session_id, step4_msg)
 
-        pa_result = await self.portfolio_advisor.advise(
-            risk_profile=risk_preference,
-            investment_amount=investment_amount,
-            symbols=symbols, context=context.results,
-            market_analysis=ma_result,
-            risk_analysis=rm_result,
-            sentiment_analysis=ss_result
-        )
+        try:
+            pa_result = await asyncio.wait_for(
+                self.portfolio_advisor.advise(
+                    risk_profile=risk_preference,
+                    investment_amount=investment_amount,
+                    symbols=symbols, context=context.results,
+                    market_analysis=ma_result,
+                    risk_analysis=rm_result,
+                    sentiment_analysis=ss_result
+                ), timeout=90
+            )
+        except (asyncio.TimeoutError, Exception) as e:
+            logger.warning(f"组合顾问执行失败: {e}")
+            pa_result = self.portfolio_advisor.make_message(
+                "组合顾问", AgentRole.PORTFOLIO_ADVISOR,
+                f"组合建议受限: {type(e).__name__}",
+                status=AgentStatus.FAILED,
+                data={"error": str(e)}
+            )
         context.results["final_advice"] = pa_result
         yield pa_result
         await self._notify(session_id, pa_result)

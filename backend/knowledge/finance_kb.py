@@ -2,6 +2,7 @@
 金融知识库 - RAG检索增强
 """
 from typing import List, Dict, Any, Optional
+from loguru import logger
 import chromadb
 from chromadb.config import Settings
 import os
@@ -178,7 +179,7 @@ class FinanceKnowledgeBase:
                 metadatas=[item["metadata"]]
             )
         
-        print(f"知识库初始化完成，共添加 {len(knowledge_items)} 条知识")
+        logger.info(f"知识库初始化完成，共添加 {len(knowledge_items)} 条知识")
     
     def search(self, query: str, n_results: int = 3) -> List[Dict[str, Any]]:
         """
@@ -209,7 +210,7 @@ class FinanceKnowledgeBase:
             return knowledge_list
             
         except Exception as e:
-            print(f"知识库搜索失败: {e}")
+            logger.warning(f"知识库搜索失败: {e}")
             return []
     
     def query_knowledge(self, query: str, n_results: int = 3) -> List[Dict[str, Any]]:

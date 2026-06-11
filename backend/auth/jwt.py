@@ -3,12 +3,25 @@ from typing import Optional, Dict
 import uuid
 import os
 import jwt
+from loguru import logger
 
 
-JWT_SECRET = os.getenv("JWT_SECRET", "finagent-pro-jwt-secret-change-in-production")
+_DEFAULT_SECRET = "finagent-pro-jwt-secret-change-in-production"
+JWT_SECRET = os.getenv("JWT_SECRET", _DEFAULT_SECRET)
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = int(os.getenv("JWT_ACCESS_EXPIRE_HOURS", "24"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_EXPIRE_DAYS", "30"))
+
+
+def validate_jwt_config():
+    """启动时校验JWT密钥安全性"""
+    if JWT_SECRET == _DEFAULT_SECRET:
+        logger.warning(
+            "⚠️  JWT_SECRET 使用默认值！生产环境请务必设置随机密钥。"
+            " 可通过: export JWT_SECRET=$(python -c 'import secrets; print(secrets.token_hex(32))')"
+        )
+    if len(JWT_SECRET) < 32:
+        logger.warning("⚠️  JWT_SECRET 长度不足32字符，建议使用更长的密钥")
 
 
 def create_access_token(user_id: uuid.UUID, role: str = "user") -> str:

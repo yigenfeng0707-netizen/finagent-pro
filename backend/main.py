@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
@@ -21,15 +21,28 @@ from orchestrator import AgentOrchestrator
 from websocket_manager import WebSocketManager
 from auth.routes import router as auth_router
 from middleware import rate_limit_middleware
+from exception_handlers import setup_exception_handlers, AgentExecutionError, DataFetchError, LLMError
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from database import get_engine, Base
+    from auth.jwt import validate_jwt_config
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    # JWT密钥安全校验
+    validate_jwt_config()
+    # 启动WebSocket心跳任务
+    heartbeat_task = asyncio.create_task(ws_manager.start_heartbeat(interval=30))
+    logger.info("WebSocket 心跳检测已启动 (间隔30s)")
     yield
+    # 优雅关闭
+    heartbeat_task.cancel()
+    try:
+        await heartbeat_task
+    except asyncio.CancelledError:
+        pass
     await engine.dispose()
 
 
@@ -62,11 +75,29 @@ app.add_middleware(
 app.middleware("http")(rate_limit_middleware)
 
 app.include_router(auth_router)
+setup_exception_handlers(app)
 
 market_service = MarketDataService()
 finance_kb = FinanceKnowledgeBase()
 orchestrator = AgentOrchestrator()
 ws_manager = WebSocketManager()
+
+
+async def optional_auth(request: Request):
+    """演示模式可选认证，生产环境强制认证"""
+    if os.getenv("ENV", "development") == "production":
+        from auth.jwt import verify_token
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=401, detail="需要认证")
+        token = auth_header.split(" ", 1)[1]
+        payload = verify_token(token)
+        if not payload:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=401, detail="Token无效或已过期")
+        return payload
+    return None  # 开发/演示模式跳过认证
 
 
 # ========== WebSocket端点 ==========
@@ -127,7 +158,7 @@ async def health_check():
 
 
 @app.post("/api/orchestrate", response_model=OrchestratorResponse)
-async def orchestrate(request: OrchestratorRequest):
+async def orchestrate(request: OrchestratorRequest, auth=Depends(optional_auth)):
     """
     多Agent协作分析入口
     
@@ -162,7 +193,7 @@ async def orchestrate(request: OrchestratorRequest):
         return OrchestratorResponse(status="success", data=report)
 
     except Exception as e:
-        return OrchestratorResponse(status="error", error=str(e))
+        return OrchestratorResponse(status="error", error=f"分析失败: {type(e).__name__}")
 
 
 def _build_sync_context(agent_messages, request):
@@ -182,7 +213,7 @@ def _build_sync_context(agent_messages, request):
 
 
 @app.post("/api/chat")
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, auth=Depends(optional_auth)):
     """智能对话入口 - 自然语言请求→自动编排Agent"""
     try:
         session_id = request.session_id or str(uuid.uuid4())
@@ -229,10 +260,11 @@ async def chat(request: ChatRequest):
         finally:
             orchestrator.remove_progress(session_id)
 
-        req_obj = type('req', (), {
-            'symbols': symbols, 'risk_preference': risk_pref,
-            'investment_amount': 100000, 'market': 'hk'
-        })()
+        from types import SimpleNamespace
+        req_obj = SimpleNamespace(
+            symbols=symbols, risk_preference=risk_pref,
+            investment_amount=100000, market='hk'
+        )
         ctx = _build_sync_context(agent_messages, req_obj)
         report = orchestrator.synthesize_report(ctx)
         await ws_manager.broadcast_final(session_id, report.model_dump())
@@ -244,24 +276,24 @@ async def chat(request: ChatRequest):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise AgentExecutionError("chat", str(e))
 
 
 @app.post("/api/stock/analyze")
-async def analyze_stock(request: StockAnalysisRequest):
+async def analyze_stock(request: StockAnalysisRequest, auth=Depends(optional_auth)):
     """单只股票快速分析"""
     if not request.symbol:
-        raise HTTPException(status_code=500, detail="股票代码不能为空")
+        raise DataFetchError("stock_analyze", "股票代码不能为空")
     try:
         agent = orchestrator.market_analyst
         result = await agent.analyze(symbol=request.symbol, market=request.market)
         return {"success": True, "data": result.data, "analysis": result.content}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise AgentExecutionError("market_analyst", str(e))
 
 
 @app.post("/api/portfolio/create")
-async def create_portfolio(request: PortfolioRequest):
+async def create_portfolio(request: PortfolioRequest, auth=Depends(optional_auth)):
     """创建投资组合"""
     try:
         result = await orchestrator.portfolio_advisor.advise(
@@ -275,11 +307,11 @@ async def create_portfolio(request: PortfolioRequest):
             "recommendation": result.content
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise AgentExecutionError("portfolio_advisor", str(e))
 
 
 @app.post("/api/risk/analyze")
-async def analyze_risk(request: RiskAnalysisRequest):
+async def analyze_risk(request: RiskAnalysisRequest, auth=Depends(optional_auth)):
     """风险分析"""
     try:
         result = await orchestrator.risk_manager.analyze(symbols=request.portfolio)
@@ -289,7 +321,7 @@ async def analyze_risk(request: RiskAnalysisRequest):
             "analysis": result.content
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise AgentExecutionError("risk_manager", str(e))
 
 
 @app.get("/api/market/stock/{symbol}")
@@ -313,7 +345,7 @@ async def get_stock_history(symbol: str, market: str = "hk", days: int = 180):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise DataFetchError("market_data", str(e))
 
 
 @app.get("/api/market/hk-spot")
@@ -325,7 +357,7 @@ async def get_hk_spot():
         stocks = df.head(20).to_dict(orient='records')
         return {"success": True, "data": stocks}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise DataFetchError("hk_spot", str(e))
 
 
 @app.get("/api/market/hot")
@@ -335,7 +367,7 @@ async def get_hot_stocks(market: str = "hk"):
         stocks = await asyncio.to_thread(market_service.get_hot_stocks, market)
         return {"status": "success", "market": market, "data": stocks}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise DataFetchError("hot_stocks", str(e))
 
 
 @app.get("/api/knowledge/query")
@@ -345,7 +377,7 @@ async def query_knowledge(query: str, top_k: int = 3):
         results = finance_kb.query_knowledge(query, top_k)
         return {"status": "success", "query": query, "results": results}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise DataFetchError("knowledge_base", str(e))
 
 
 # ========== 启动 ==========

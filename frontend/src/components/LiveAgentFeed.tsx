@@ -54,6 +54,9 @@ const LiveAgentFeed: React.FC<LiveAgentFeedProps> = ({ messages, height = 400 })
   return (
     <div
       ref={listRef}
+      role="log"
+      aria-live="polite"
+      aria-label="Agent实时消息流"
       style={{
         height,
         overflowY: 'auto',

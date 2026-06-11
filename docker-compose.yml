@@ -68,32 +68,6 @@ services:
         reservations:
           memory: 512M
 
-  celery_worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
-    command: celery -A tasks.celery_app worker -l info -c 4
-    environment:
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - ZHIPU_API_KEY=${ZHIPU_API_KEY}
-      - DATABASE_URL=postgresql+asyncpg://finagent:${POSTGRES_PASSWORD:-finagent_dev_123}@postgres:5432/finagent_pro
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_dev_123}@redis:6379/0
-      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-redis_dev_123}@redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-redis_dev_123}@redis:6379/1
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./backend/cache:/app/backend/cache
-      - ./backend/chroma_db:/app/backend/chroma_db
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-
   frontend:
     build:
       context: .

@@ -2,6 +2,7 @@ import akshare as ak
 import pandas as pd
 import numpy as np
 from typing import Dict, Any, List, Optional, Callable
+from loguru import logger
 
 
 class MarketTools:
@@ -58,6 +59,38 @@ class MarketTools:
             }
         except Exception as e:
             return {"error": str(e)}
+
+    @staticmethod
+    def get_fund_flow(symbol: str, market: str = "hk") -> Dict[str, Any]:
+        """获取个股资金流向数据"""
+        try:
+            import akshare as ak
+            df = ak.stock_hk_fund_flow_detail_em(symbol=symbol)
+            if df is None or df.empty:
+                return {"net_inflow": 0, "direction": "无数据"}
+            
+            latest = df.iloc[0] if len(df) > 0 else None
+            if latest is None:
+                return {"net_inflow": 0, "direction": "无数据"}
+            
+            # Parse net inflow from the dataframe columns
+            net_inflow = 0
+            for col in df.columns:
+                if '净流入' in str(col) or 'net' in str(col).lower():
+                    try:
+                        net_inflow = float(latest[col])
+                    except (ValueError, TypeError):
+                        pass
+                    break
+            
+            return {
+                "net_inflow": net_inflow,
+                "direction": "净流入" if net_inflow > 0 else "净流出" if net_inflow < 0 else "持平",
+                "data_date": str(latest.get('日期', '')) if '日期' in df.columns else ""
+            }
+        except Exception as e:
+            logger.warning(f"资金流向数据获取失败({symbol}): {e}")
+            return {"net_inflow": 0, "direction": "无数据", "error": str(e)}
 
     @staticmethod
     def calculate_var(returns: List[float], confidence: float = 0.95) -> float:
@@ -119,6 +152,18 @@ class MarketTools:
             portfolio_returns_series = returns_df @ weights
             pvar = float(np.percentile(portfolio_returns_series, 5) * 100)
 
+            # CVaR: expected loss given loss exceeds VaR
+            portfolio_returns = portfolio_returns_series.values
+            var_threshold = np.percentile(portfolio_returns, 5)
+            tail_returns = portfolio_returns[portfolio_returns <= var_threshold]
+            cvar = float(tail_returns.mean() * 100) if len(tail_returns) > 0 else pvar
+
+            # Sharpe Ratio (annualized, risk-free rate = 3%)
+            risk_free_rate = 0.03
+            annual_return = float(np.mean(portfolio_returns) * 252)
+            annual_vol = float(np.sqrt(portfolio_variance))  # already from covariance matrix
+            sharpe_ratio = round((annual_return - risk_free_rate) / annual_vol, 2) if annual_vol > 0 else 0
+
             if pvol < 15:
                 risk_level = "低风险"
             elif pvol < 25:
@@ -129,6 +174,11 @@ class MarketTools:
             return {
                 "portfolio_volatility": round(pvol, 2),
                 "portfolio_var_95": round(pvar, 2),
+                "cvar_95": round(cvar, 2),
+                "sharpe_ratio": sharpe_ratio,
+                "annual_return": round(annual_return * 100, 2),
+                "annual_volatility": round(annual_vol * 100, 2),
+                "var_time_horizon": "1-day",
                 "risk_level": risk_level,
                 "risk_level_num": 25 if risk_level == "低风险" else 55 if risk_level == "中风险" else 80,
                 "stock_risks": stock_risks
@@ -143,4 +193,5 @@ class MarketTools:
             "get_technical_indicators": MarketTools.get_technical_indicators,
             "calculate_var": MarketTools.calculate_var,
             "get_portfolio_risk": MarketTools.get_portfolio_risk,
+            "get_fund_flow": MarketTools.get_fund_flow,
         }

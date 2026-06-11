@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Layout, Menu, Card, Row, Col, Tabs, List, Tag, message } from 'antd';
+import { Layout, Menu, Card, Row, Col, Tabs, List, Tag, message, Alert, Steps, Progress, Statistic } from 'antd';
+import { Typography as AntTypography } from 'antd';
 import {
   DashboardOutlined, LineChartOutlined, PieChartOutlined, SafetyOutlined,
   RobotOutlined, SettingOutlined, ApiOutlined,
@@ -14,6 +15,8 @@ import RiskGauge from './charts/RiskGauge';
 import { useWebSocket, WSMessage } from './hooks/useWebSocket';
 import { API_BASE } from './constants';
 import './App.css';
+
+const { Title } = AntTypography;
 
 const { Header, Sider, Content } = Layout;
 
@@ -42,6 +45,7 @@ interface AnalysisResult {
   expected_return: number; reasoning: string;
   portfolio_allocation: Array<{symbol: string; name: string; weight: number; amount: number}>;
   agent_messages: AgentMessage[];
+  cvar_95?: number; sharpe_ratio?: number; annual_return?: number; annual_volatility?: number;
 }
 
 function genId() { return 'sess_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -64,12 +68,26 @@ const App: React.FC = () => {
   const [workbenchSteps, setWorkbenchSteps] = useState<any[]>([]);
   const [toolCalls, setToolCalls] = useState<any[]>([]);
   const [liveContext, setLiveContext] = useState<Record<string, string>>({});
+  const [analysisMetrics, setAnalysisMetrics] = useState<{duration: number, toolCalls: number, agents: number} | null>(null);
+  const [analysisProgress, setAnalysisProgress] = useState<{step: number, total: number, agentName: string}>({step: 0, total: 4, agentName: ''});
+  const analysisStartTime = useRef<number>(0);
 
   const stepCounter = useRef(0);
 
   const handleWSMessage = useCallback((msg: WSMessage) => {
     if (msg.type === 'agent_progress') {
       const p = msg.payload;
+      // Update progress tracking based on agent role
+      const roleProgressMap: Record<string, {step: number, total: number, agentName: string}> = {
+        MARKET_ANALYST: { step: 1, total: 4, agentName: '市场分析师' },
+        SENTIMENT_SCANNER: { step: 2, total: 4, agentName: '情绪扫描器' },
+        RISK_MANAGER: { step: 3, total: 4, agentName: '风险经理' },
+        PORTFOLIO_ADVISOR: { step: 4, total: 4, agentName: '组合顾问' },
+      };
+      if (p.role && roleProgressMap[p.role]) {
+        setAnalysisProgress(roleProgressMap[p.role]);
+      }
+
       const feed: AgentFeedMessage = {
         agent: p.agent || '', role: p.role || '', content: p.content || '',
         status: p.status || 'completed', timestamp: p.timestamp || '',
@@ -163,6 +181,12 @@ const App: React.FC = () => {
     } else if (msg.type === 'final_report') {
       const report = msg.payload;
       setAnalysisResult(report);
+      setAnalysisProgress({step: 5, total: 4, agentName: ''});
+      setAnalysisMetrics({
+        duration: (Date.now() - analysisStartTime.current) / 1000,
+        toolCalls: toolCalls.length,
+        agents: 4,
+      });
       setLoading(false);
       message.success('多Agent分析完成！');
       // Small delay to ensure all messages are rendered, then disconnect
@@ -193,7 +217,7 @@ const App: React.FC = () => {
     } catch { message.error('获取股票数据失败'); }
   };
 
-  const runAnalysis = async () => {
+  const runAnalysis = async (stock?: string, amount?: number, risk?: string) => {
     setLoading(true);
     setAnalysisResult(null);
     setFeedMessages([]);
@@ -201,6 +225,9 @@ const App: React.FC = () => {
     setWorkbenchSteps([]);
     setToolCalls([]);
     setLiveContext({});
+    setAnalysisMetrics(null);
+    setAnalysisProgress({step: 0, total: 4, agentName: ''});
+    analysisStartTime.current = Date.now();
     stepCounter.current = 0;
 
     const sid = genId();
@@ -237,9 +264,9 @@ const App: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          symbols: [selectedStock],
-          investment_amount: investmentAmount,
-          risk_preference: riskPreference,
+          symbols: [stock || selectedStock],
+          investment_amount: amount || investmentAmount,
+          risk_preference: risk || riskPreference,
           market: 'hk',
           session_id: sid,
         }),
@@ -264,10 +291,15 @@ const App: React.FC = () => {
     }
   };
 
+  const runDemo = () => {
+    setSelectedStock('00700');
+    setInvestmentAmount(100000);
+    setRiskPreference('moderate');
+    runAnalysis('00700', 100000, 'moderate');
+  };
+
   const fetchMarketOverview = async () => {
     try {
-      // selectedStock is available from closure for potential stock-specific filtering
-      const symbol = selectedStock;
       const response = await fetch(`${API_BASE}/api/market/hk-spot`);
       const data = await response.json();
       if (data.success && data.data && data.data.length > 0) {
@@ -328,21 +360,63 @@ const App: React.FC = () => {
         </Header>
         <Content style={{ margin: '24px 16px', padding: 24, background: '#f0f2f5', minHeight: 280 }}>
           {selectedMenu === 'dashboard' && (
-            <DashboardPage
-              marketOverview={marketOverview}
-              stockData={stockData}
-              selectedStock={selectedStock}
-              setSelectedStock={setSelectedStock}
-              investmentAmount={investmentAmount}
-              setInvestmentAmount={setInvestmentAmount}
-              riskPreference={riskPreference}
-              setRiskPreference={setRiskPreference}
-              runAnalysis={runAnalysis}
-              loading={loading}
-              feedMessages={feedMessages}
-              analysisResult={analysisResult}
-              wsConnected={wsConnected}
-            />
+            <>
+              <DashboardPage
+                marketOverview={marketOverview}
+                stockData={stockData}
+                selectedStock={selectedStock}
+                setSelectedStock={setSelectedStock}
+                investmentAmount={investmentAmount}
+                setInvestmentAmount={setInvestmentAmount}
+                riskPreference={riskPreference}
+                setRiskPreference={setRiskPreference}
+                runAnalysis={runAnalysis}
+                loading={loading}
+                feedMessages={feedMessages}
+                analysisResult={analysisResult}
+                wsConnected={wsConnected}
+                runDemo={runDemo}
+                analysisMetrics={analysisMetrics}
+              />
+              {loading && (
+                <div style={{
+                  position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                  background: 'rgba(0,0,0,0.45)', zIndex: 1000,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Card style={{ width: 480, borderRadius: 12, textAlign: 'center' }} bordered={false}>
+                    <Title level={4} style={{ marginBottom: 24 }}>AI 多Agent协作分析中</Title>
+                    <Steps
+                      current={analysisProgress.step - 1}
+                      status={analysisProgress.step > 0 ? 'process' : 'wait'}
+                      items={[
+                        { title: '市场分析师', description: '技术面分析' },
+                        { title: '情绪扫描器', description: '市场情绪' },
+                        { title: '风险经理', description: '风险评估' },
+                        { title: '组合顾问', description: '资产配置' },
+                      ]}
+                    />
+                    <Progress
+                      percent={Math.round((analysisProgress.step / 4) * 100)}
+                      status={analysisProgress.step >= 4 ? 'success' : 'active'}
+                      style={{ marginTop: 24 }}
+                    />
+                    <div style={{ marginTop: 12, color: '#888' }}>
+                      {analysisProgress.agentName ? `正在执行: ${analysisProgress.agentName}` : '正在初始化...'}
+                    </div>
+                  </Card>
+                </div>
+              )}
+              {analysisMetrics && (
+                <Alert
+                  type="success"
+                  showIcon
+                  message={`分析完成 | 耗时 ${analysisMetrics.duration.toFixed(1)}秒 | ${analysisMetrics.toolCalls}次工具调用 | ${analysisMetrics.agents}个Agent协作`}
+                  closable
+                  style={{ marginTop: 12 }}
+                />
+              )}
+            </>
           )}
           {selectedMenu === 'stocks' && (
             <StockListPage
@@ -411,6 +485,19 @@ const App: React.FC = () => {
                   </Card>
                 </Col>
               </Row>
+              {analysisResult && (
+                <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+                  <Col span={8}>
+                    <Statistic title="CVaR(95%)" value={analysisResult.cvar_95 ?? 0} suffix="%" precision={2} valueStyle={{ color: '#cf1322' }} />
+                  </Col>
+                  <Col span={8}>
+                    <Statistic title="夏普比率" value={analysisResult.sharpe_ratio ?? 0} precision={2} valueStyle={{ color: (analysisResult.sharpe_ratio ?? 0) > 1 ? '#3f8600' : '#333' }} />
+                  </Col>
+                  <Col span={8}>
+                    <Statistic title="年化收益" value={analysisResult.annual_return ?? 0} suffix="%" precision={2} />
+                  </Col>
+                </Row>
+              )}
             </Card>
           )}
           {selectedMenu === 'settings' && (

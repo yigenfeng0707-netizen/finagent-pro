@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Row, Col, Statistic, Button, Input, Select, Spin, Tag } from 'antd';
+import { Card, Row, Col, Statistic, Button, Input, Select, Skeleton, Tag } from 'antd';
 import {
   RiseOutlined, FallOutlined, DollarOutlined, RobotOutlined, ThunderboltOutlined,
 } from '@ant-design/icons';
@@ -31,6 +31,8 @@ export interface DashboardPageProps {
   feedMessages: any[];
   analysisResult: any;
   wsConnected: boolean;
+  runDemo: () => void;
+  analysisMetrics: {duration: number, toolCalls: number, agents: number} | null;
 }
 
 const DashboardPage: React.FC<DashboardPageProps> = ({
@@ -47,6 +49,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({
   feedMessages,
   analysisResult,
   wsConnected,
+  runDemo,
+  analysisMetrics,
 }) => (
   <div className="dashboard">
     <Row gutter={[16, 16]}>
@@ -83,7 +87,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({
             {HK_STOCKS.map(s => <Option key={s.code} value={s.code}>{s.name} ({s.code})</Option>)}
           </Select>
         }>
-          {stockData ? <StockChart data={stockData} /> : <div style={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin size="large" /></div>}
+          {stockData ? <StockChart data={stockData} recommendation={analysisResult?.recommendation} /> : <div style={{ height: 400, padding: 24 }}><Skeleton active><Skeleton.Input active style={{ width: '100%', marginBottom: 16 }} /><Skeleton.Button active style={{ marginRight: 8 }} /><Skeleton.Button active /></Skeleton></div>}
         </Card>
       </Col>
       <Col span={8}>
@@ -102,6 +106,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({
           </div>
           <Button type="primary" icon={<ThunderboltOutlined />} onClick={runAnalysis} loading={loading} block size="large">
             {loading ? 'AI分析中...' : '启动AI分析'}
+          </Button>
+          <Button type="primary" ghost icon={<ThunderboltOutlined />} onClick={runDemo} loading={loading} block size="large" style={{ marginTop: 8 }}>
+            一键演示
           </Button>
           {loading && feedMessages.length > 0 && (
             <div style={{ marginTop: 12 }}>

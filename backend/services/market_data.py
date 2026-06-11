@@ -8,10 +8,48 @@ from datetime import datetime, timedelta
 import json
 import os
 from loguru import logger
+import redis.asyncio as aioredis
+
+
+class RedisCache:
+    """Redis缓存层，带文件缓存降级"""
+    def __init__(self):
+        self._redis = None
+    
+    async def _get_redis(self):
+        if self._redis is None:
+            try:
+                self._redis = await aioredis.from_url(
+                    os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+                    socket_connect_timeout=3,
+                    decode_responses=True
+                )
+            except Exception:
+                self._redis = False  # Redis不可用，降级到文件缓存
+        return self._redis if self._redis is not False else None
+    
+    async def get(self, key: str) -> Optional[str]:
+        r = await self._get_redis()
+        if r:
+            try:
+                return await r.get(key)
+            except Exception:
+                pass
+        return None
+    
+    async def set(self, key: str, value: str, ttl: int = 300):
+        r = await self._get_redis()
+        if r:
+            try:
+                await r.setex(key, ttl, value)
+            except Exception:
+                pass
 
 
 class MarketDataService:
     """市场数据服务"""
+    
+    _cache = RedisCache()
     
     def __init__(self):
         self.cache_dir = "./cache"
@@ -86,6 +124,37 @@ class MarketDataService:
         except Exception as e:
             logger.warning(f"获取历史数据失败: {e}")
             return pd.DataFrame()
+    
+    async def get_stock_history_cached(self, symbol: str, market: str = "hk", days: int = 180):
+        """带Redis缓存的股票历史数据"""
+        cache_key = f"stock_history:{market}:{symbol}:{days}"
+        
+        # Try Redis cache first
+        cached = await self._cache.get(cache_key)
+        if cached:
+            try:
+                data = json.loads(cached)
+                df = pd.DataFrame(data)
+                return df
+            except Exception:
+                pass
+        
+        # Fallback to direct API call
+        df = self.get_stock_history(symbol, market, days=days)
+        
+        # Store in cache
+        if df is not None and not df.empty:
+            try:
+                # Convert datetime columns to string for JSON serialization
+                df_copy = df.copy()
+                for col in df_copy.columns:
+                    if 'date' in col.lower() or '日期' in col:
+                        df_copy[col] = df_copy[col].astype(str)
+                await self._cache.set(cache_key, df_copy.to_json(orient='records'), ttl=300)
+            except Exception:
+                pass
+        
+        return df
     
     def get_stock_info(self, symbol: str, market: str = "hk") -> Dict[str, Any]:
         """

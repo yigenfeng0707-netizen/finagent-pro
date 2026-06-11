@@ -175,6 +175,8 @@ const RiskGauge: React.FC<RiskGaugeProps> = ({
     <div 
       ref={chartRef} 
       style={{ width: '100%', height: `${height}px` }}
+      aria-label="风险等级仪表盘"
+      role="img"
     />
   );
 };

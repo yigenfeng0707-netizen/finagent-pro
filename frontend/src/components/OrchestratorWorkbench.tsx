@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Card, Row, Col, Tag, Typography, Table, Empty, Descriptions } from 'antd';
 import {
   BranchesOutlined, ToolOutlined, SwapOutlined, CheckCircleOutlined,
   LoadingOutlined, ClockCircleOutlined,
 } from '@ant-design/icons';
+import AgentDAGChart from './AgentDAGChart';
 
 const { Text } = Typography;
 
@@ -40,9 +41,30 @@ const ROLE_COLORS: Record<string, string> = {
   orchestrator: '#722ed1',
 };
 
+const DAG_AGENTS = [
+  { role: 'market_analyst', name: 'MarketAnalyst' },
+  { role: 'sentiment_scanner', name: 'SentimentScanner' },
+  { role: 'risk_manager', name: 'RiskManager' },
+  { role: 'portfolio_advisor', name: 'PortfolioAdvisor' },
+];
+
 const OrchestratorWorkbench: React.FC<OrchestratorWorkbenchProps> = ({
   steps, toolCalls, liveContext,
 }) => {
+  const { dagSteps, activeStep } = useMemo(() => {
+    const mapped = DAG_AGENTS.map((da) => {
+      const match = steps.find((s) => s.role === da.role);
+      return {
+        name: da.name,
+        status: match ? match.status : 'pending' as const,
+        confidence: undefined as number | undefined,
+        duration: undefined as number | undefined,
+      };
+    });
+    const running = mapped.findIndex((s) => s.status === 'running');
+    return { dagSteps: mapped, activeStep: running >= 0 ? running : -1 };
+  }, [steps]);
+
   const flowColumns = [
     {
       title: '步骤',
@@ -147,6 +169,15 @@ const OrchestratorWorkbench: React.FC<OrchestratorWorkbenchProps> = ({
   return (
     <div style={{ height: '100%' }}>
       <Row gutter={[16, 16]}>
+        <Col span={24}>
+          <Card
+            title={<span><BranchesOutlined /> Agent协作流程图</span>}
+            size="small"
+          >
+            <AgentDAGChart steps={dagSteps} activeStep={activeStep} />
+          </Card>
+        </Col>
+
         <Col span={24}>
           <Card
             title={<span><BranchesOutlined /> 任务流程</span>}

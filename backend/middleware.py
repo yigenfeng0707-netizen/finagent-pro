@@ -1,6 +1,7 @@
 from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
 import time
+import uuid
 from collections import defaultdict
 
 
@@ -39,6 +40,9 @@ RATE_LIMITS = {
 
 
 async def rate_limit_middleware(request: Request, call_next):
+    # X-Request-ID: 为每个请求生成唯一追踪ID
+    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())[:12]
+
     if request.url.path.startswith("/api/"):
         key = get_client_key(request)
 
@@ -53,8 +57,9 @@ async def rate_limit_middleware(request: Request, call_next):
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Too many requests. Please try again later."},
-                headers={"Retry-After": str(window)},
+                headers={"Retry-After": str(window), "X-Request-ID": request_id},
             )
 
     response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
     return response
