@@ -223,6 +223,34 @@ FINNHUB_API_KEY=your_key_here     # 新闻数据
 
 ---
 
+## 系统截图
+
+**仪表盘 — 快速分析面板**
+
+<p align="center">
+  <img src="./screenshots/01_dashboard.png" alt="FinAgent Pro 仪表盘" width="800" />
+</p>
+
+**数字员工工作台 — Agent DAG 决策溯源图**
+
+<p align="center">
+  <img src="./screenshots/04_workbench.png" alt="数字员工工作台" width="800" />
+</p>
+
+**Agent 实时对话**
+
+<p align="center">
+  <img src="./screenshots/03_agent_chat.png" alt="Agent对话界面" width="800" />
+</p>
+
+**风险评估页面**
+
+<p align="center">
+  <img src="./screenshots/06_risk_page.png" alt="风险评估页面" width="800" />
+</p>
+
+---
+
 ## 致谢
 
 - AFAC2026 金融智能创新大赛
