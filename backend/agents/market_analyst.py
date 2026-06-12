@@ -1,8 +1,10 @@
-from .base_agent import BaseAgent
-from models.schemas import AgentRole, AgentStatus, AgentMessage
-from tools.market_tools import MarketTools
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 from loguru import logger
+from models.schemas import AgentMessage, AgentRole, AgentStatus
+from tools.market_tools import MarketTools
+
+from .base_agent import BaseAgent
 
 
 class MarketAnalyst(BaseAgent):
@@ -12,14 +14,13 @@ class MarketAnalyst(BaseAgent):
             role="资深市场分析师",
             goal="深入分析港股市场行情，识别趋势和投资机会",
             backstory="你是一位拥有20年经验的资深市场分析师，精通技术分析和基本面分析。"
-                       "你擅长分析股票走势、识别市场趋势、发现投资机会。"
-                       "你的分析严谨、数据驱动，能够为投资决策提供有力支持。"
+            "你擅长分析股票走势、识别市场趋势、发现投资机会。"
+            "你的分析严谨、数据驱动，能够为投资决策提供有力支持。",
         )
         self.register_tool("get_stock_price", MarketTools.get_stock_price)
         self.register_tool("get_technical_indicators", MarketTools.get_technical_indicators)
 
-    async def analyze(self, symbol: str, market: str = "hk",
-                      context: Optional[Dict[str, Any]] = None) -> AgentMessage:
+    async def analyze(self, symbol: str, market: str = "hk", context: Optional[Dict[str, Any]] = None) -> AgentMessage:
         try:
             indicators = await self.call_tool("get_technical_indicators", symbol=symbol, market=market)
             if "error" in indicators:
@@ -28,7 +29,7 @@ class MarketAnalyst(BaseAgent):
                     role=AgentRole.MARKET_ANALYST,
                     content=f"分析失败: {indicators['error']}",
                     status=AgentStatus.FAILED,
-                    data={"symbol": symbol, "error": indicators["error"]}
+                    data={"symbol": symbol, "error": indicators["error"]},
                 )
 
             thinking = (
@@ -82,7 +83,7 @@ class MarketAnalyst(BaseAgent):
                 content=llm_output,
                 confidence=round(confidence, 2),
                 data=indicators,
-                thinking=thinking
+                thinking=thinking,
             )
 
         except Exception as e:
@@ -92,5 +93,5 @@ class MarketAnalyst(BaseAgent):
                 role=AgentRole.MARKET_ANALYST,
                 content=f"市场分析师遇到异常: {type(e).__name__}: {str(e)}",
                 status=AgentStatus.FAILED,
-                data={"error": str(e)}
+                data={"error": str(e)},
             )

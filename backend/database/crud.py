@@ -1,14 +1,14 @@
-from sqlalchemy import select, func
+import uuid
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
+from database.models import AnalysisRecord, ApiUsage, AuditLog, Session, Subscription, User
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
-import uuid
-
-from database.models import User, Session, AnalysisRecord, Subscription, AuditLog, ApiUsage
-
 
 # ── User ──
+
 
 async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID) -> Optional[User]:
     result = await db.execute(select(User).where(User.id == user_id))
@@ -39,16 +39,22 @@ async def create_user(db: AsyncSession, email: str, username: str, hashed_passwo
 
 
 async def update_user_login(db: AsyncSession, user_id: uuid.UUID):
-    await db.execute(
-        User.__table__.update().where(User.id == user_id).values(last_login_at=datetime.utcnow())
-    )
+    await db.execute(User.__table__.update().where(User.id == user_id).values(last_login_at=datetime.utcnow()))
     await db.commit()
 
 
 # ── Session ──
 
-async def create_session(db: AsyncSession, user_id: uuid.UUID, access_token: str,
-                         refresh_token: str, ip: str = None, ua: str = None, hours: int = 24) -> Session:
+
+async def create_session(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    access_token: str,
+    refresh_token: str,
+    ip: str = None,
+    ua: str = None,
+    hours: int = 24,
+) -> Session:
     sess = Session(
         id=uuid.uuid4(),
         user_id=user_id,
@@ -65,23 +71,20 @@ async def create_session(db: AsyncSession, user_id: uuid.UUID, access_token: str
 
 async def get_session_by_access_token(db: AsyncSession, token: str) -> Optional[Session]:
     result = await db.execute(
-        select(Session).options(selectinload(Session.user)).where(
-            Session.access_token == token,
-            Session.revoked == False,
-            Session.expires_at > datetime.utcnow()
-        )
+        select(Session)
+        .options(selectinload(Session.user))
+        .where(Session.access_token == token, Session.revoked == False, Session.expires_at > datetime.utcnow())
     )
     return result.scalar_one_or_none()
 
 
 async def revoke_user_sessions(db: AsyncSession, user_id: uuid.UUID):
-    await db.execute(
-        Session.__table__.update().where(Session.user_id == user_id).values(revoked=True)
-    )
+    await db.execute(Session.__table__.update().where(Session.user_id == user_id).values(revoked=True))
     await db.commit()
 
 
 # ── Analysis Record ──
+
 
 async def create_analysis_record(db: AsyncSession, user_id: uuid.UUID, request_data: Dict[str, Any]) -> AnalysisRecord:
     record = AnalysisRecord(
@@ -97,25 +100,35 @@ async def create_analysis_record(db: AsyncSession, user_id: uuid.UUID, request_d
 
 
 async def update_analysis_record(db: AsyncSession, record_id: uuid.UUID, **kwargs):
-    await db.execute(
-        AnalysisRecord.__table__.update().where(AnalysisRecord.id == record_id).values(**kwargs)
-    )
+    await db.execute(AnalysisRecord.__table__.update().where(AnalysisRecord.id == record_id).values(**kwargs))
     await db.commit()
 
 
-async def get_user_analysis_records(db: AsyncSession, user_id: uuid.UUID, limit: int = 20, offset: int = 0) -> List[AnalysisRecord]:
+async def get_user_analysis_records(
+    db: AsyncSession, user_id: uuid.UUID, limit: int = 20, offset: int = 0
+) -> List[AnalysisRecord]:
     result = await db.execute(
-        select(AnalysisRecord).where(AnalysisRecord.user_id == user_id)
+        select(AnalysisRecord)
+        .where(AnalysisRecord.user_id == user_id)
         .order_by(AnalysisRecord.created_at.desc())
-        .limit(limit).offset(offset)
+        .limit(limit)
+        .offset(offset)
     )
     return list(result.scalars().all())
 
 
 # ── API Usage ──
 
-async def record_api_usage(db: AsyncSession, user_id: uuid.UUID, endpoint: str,
-                           method: str, status_code: int, duration_ms: int = None, tokens: int = 0):
+
+async def record_api_usage(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    endpoint: str,
+    method: str,
+    status_code: int,
+    duration_ms: int = None,
+    tokens: int = 0,
+):
     usage = ApiUsage(
         id=uuid.uuid4(),
         user_id=user_id,
@@ -149,9 +162,17 @@ async def get_user_usage_stats(db: AsyncSession, user_id: uuid.UUID, since: date
 
 # ── Audit Log ──
 
-async def create_audit_log(db: AsyncSession, user_id: uuid.UUID, action: str,
-                           resource: str = None, resource_id: str = None,
-                           detail: Dict = None, ip: str = None, ua: str = None):
+
+async def create_audit_log(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    action: str,
+    resource: str = None,
+    resource_id: str = None,
+    detail: Dict = None,
+    ip: str = None,
+    ua: str = None,
+):
     log = AuditLog(
         id=uuid.uuid4(),
         user_id=user_id,

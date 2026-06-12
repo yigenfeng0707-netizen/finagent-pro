@@ -4,11 +4,12 @@ Revision ID: 001
 Revises:
 Create Date: 2026-06-10
 """
-from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
+
 import uuid
 
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.dialects.postgresql import UUID
 
 revision = "001"
 down_revision = None
@@ -72,7 +73,9 @@ def upgrade():
     op.create_table(
         "subscriptions",
         sa.Column("id", UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
-        sa.Column("user_id", UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True),
+        sa.Column(
+            "user_id", UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
+        ),
         sa.Column("plan", sa.String(20), nullable=False),
         sa.Column("status", sa.String(20), default="active"),
         sa.Column("current_period_start", sa.DateTime(), nullable=False),

@@ -1,11 +1,11 @@
 import json
 import os
 import re
-from typing import Dict, Any, Optional, List
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 # 仅允许字母、数字、下划线和短横线，防止路径穿越
-_SESSION_ID_RE = re.compile(r'^[a-zA-Z0-9_-]{1,128}$')
+_SESSION_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,128}$")
 
 
 class SessionMemory:
@@ -35,11 +35,9 @@ class SessionMemory:
 
     def append_history(self, session_id: str, role: str, content: str):
         data = self.load_session(session_id) or {"history": [], "preferences": {}}
-        data.setdefault("history", []).append({
-            "role": role,
-            "content": content,
-            "timestamp": datetime.now().isoformat()
-        })
+        data.setdefault("history", []).append(
+            {"role": role, "content": content, "timestamp": datetime.now().isoformat()}
+        )
         self.save_session(session_id, data)
 
     def get_history(self, session_id: str, limit: int = 10) -> List[Dict[str, str]]:

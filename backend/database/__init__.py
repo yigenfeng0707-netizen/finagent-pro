@@ -1,17 +1,19 @@
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy.orm import DeclarativeBase
-from typing import AsyncGenerator
 import os
+from typing import AsyncGenerator
+
+from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(DeclarativeBase):
     pass
 
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://finagent:finagent123@localhost:5432/finagent_pro"
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    logger.warning("DATABASE_URL 未配置，使用本地开发默认值。生产环境必须设置此环境变量。")
+    DATABASE_URL = "postgresql+asyncpg://finagent:finagent_dev@localhost:5432/finagent_pro"
 
 _engine = None
 _AsyncSessionLocal = None

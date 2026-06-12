@@ -1,8 +1,10 @@
-from .base_agent import BaseAgent
-from models.schemas import AgentRole, AgentStatus, AgentMessage
-from tools.market_tools import MarketTools
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+
 from loguru import logger
+from models.schemas import AgentMessage, AgentRole, AgentStatus
+from tools.market_tools import MarketTools
+
+from .base_agent import BaseAgent
 
 
 class RiskManager(BaseAgent):
@@ -12,16 +14,19 @@ class RiskManager(BaseAgent):
             role="首席风险官",
             goal="全面评估投资组合风险，提供风险预警和管理建议",
             backstory="你是一位拥有CFA和FRM双证的首席风险官，在顶级投行工作15年。"
-                       "你精通VaR模型、压力测试、情景分析等风险管理工具。"
-                       "你善于识别市场风险、信用风险、流动性风险等各类风险。"
+            "你精通VaR模型、压力测试、情景分析等风险管理工具。"
+            "你善于识别市场风险、信用风险、流动性风险等各类风险。",
         )
         self.register_tool("get_portfolio_risk", MarketTools.get_portfolio_risk)
         self.register_tool("calculate_var", MarketTools.calculate_var)
         self.register_tool("get_stock_price", MarketTools.get_stock_price)
 
-    async def analyze(self, symbols: List[Dict[str, Any]],
-                      context: Optional[Dict[str, Any]] = None,
-                      market_analysis: Optional[AgentMessage] = None) -> AgentMessage:
+    async def analyze(
+        self,
+        symbols: List[Dict[str, Any]],
+        context: Optional[Dict[str, Any]] = None,
+        market_analysis: Optional[AgentMessage] = None,
+    ) -> AgentMessage:
         try:
             portfolio_risk = await self.call_tool("get_portfolio_risk", symbols=symbols)
             if "error" in portfolio_risk:
@@ -30,14 +35,12 @@ class RiskManager(BaseAgent):
                     role=AgentRole.RISK_MANAGER,
                     content=f"风险评估失败: {portfolio_risk['error']}",
                     status=AgentStatus.FAILED,
-                    data={"error": portfolio_risk["error"]}
+                    data={"error": portfolio_risk["error"]},
                 )
 
             risk_data = portfolio_risk
             risk_level_num = (
-                25 if risk_data["risk_level"] == "低风险"
-                else 55 if risk_data["risk_level"] == "中风险"
-                else 80
+                25 if risk_data["risk_level"] == "低风险" else 55 if risk_data["risk_level"] == "中风险" else 80
             )
 
             market_context = ""
@@ -92,7 +95,7 @@ class RiskManager(BaseAgent):
                 content=llm_output,
                 confidence=0.75,
                 data={"risk_level": risk_level_num, "risk_data": risk_data},
-                thinking=thinking
+                thinking=thinking,
             )
 
         except Exception as e:
@@ -102,5 +105,5 @@ class RiskManager(BaseAgent):
                 role=AgentRole.RISK_MANAGER,
                 content=f"风险经理遇到异常: {type(e).__name__}: {str(e)}",
                 status=AgentStatus.FAILED,
-                data={"error": str(e)}
+                data={"error": str(e)},
             )

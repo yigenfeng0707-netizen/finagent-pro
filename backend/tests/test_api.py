@@ -1,6 +1,8 @@
-import pytest
-import sys
 import os
+import sys
+
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
@@ -28,10 +30,8 @@ class TestAPI:
         assert data["status"] == "success"
 
     async def test_orchestrate_endpoint(self, client):
-        response = await client.post("/api/orchestrate", json={
-            "symbols": ["00700"],
-            "investment_amount": 100000,
-            "risk_preference": "moderate",
-            "market": "hk"
-        })
+        response = await client.post(
+            "/api/orchestrate",
+            json={"symbols": ["00700"], "investment_amount": 100000, "risk_preference": "moderate", "market": "hk"},
+        )
         assert response.status_code == 200

@@ -1,12 +1,13 @@
 import asyncio
-from typing import Optional, Dict, Any, Callable
-from langchain_openai import ChatOpenAI
-from crewai import Agent
 import os
-from dotenv import load_dotenv
-from models.schemas import AgentMessage, AgentRole, AgentStatus
 from datetime import datetime
+from typing import Any, Callable, Dict, Optional
+
+from crewai import Agent
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
 from loguru import logger
+from models.schemas import AgentMessage, AgentRole, AgentStatus
 
 load_dotenv()
 
@@ -35,14 +36,14 @@ class BaseAgent:
                 api_key=os.getenv("ZHIPU_API_KEY"),
                 base_url=os.getenv("ZHIPU_API_BASE", "https://open.bigmodel.cn/api/paas/v4/"),
                 max_tokens=int(os.getenv("MAX_TOKENS", "4096")),
-                temperature=float(os.getenv("TEMPERATURE", "0.7"))
+                temperature=float(os.getenv("TEMPERATURE", "0.7")),
             )
         return ChatOpenAI(
             model=os.getenv("DEFAULT_MODEL", "deepseek-chat"),
             api_key=os.getenv("DEEPSEEK_API_KEY"),
             base_url=os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com/v1"),
             max_tokens=int(os.getenv("MAX_TOKENS", "4096")),
-            temperature=float(os.getenv("TEMPERATURE", "0.7"))
+            temperature=float(os.getenv("TEMPERATURE", "0.7")),
         )
 
     def _get_backup_llm(self) -> ChatOpenAI:
@@ -60,7 +61,7 @@ class BaseAgent:
             tools=tools or [],
             verbose=True,
             allow_delegation=False,
-            memory=True
+            memory=True,
         )
 
     async def run_llm(self, prompt: str) -> str:
@@ -70,10 +71,8 @@ class BaseAgent:
         # Try primary LLM with retry
         for attempt in range(3):
             try:
-                response = await asyncio.wait_for(
-                    self.llm.ainvoke(messages), timeout=60
-                )
-                return response.content if hasattr(response, 'content') else str(response)
+                response = await asyncio.wait_for(self.llm.ainvoke(messages), timeout=60)
+                return response.content if hasattr(response, "content") else str(response)
             except asyncio.TimeoutError:
                 last_error = "LLM响应超时(60s)"
                 logger.warning(f"LLM调用超时 (attempt {attempt + 1}/3)")
@@ -82,25 +81,28 @@ class BaseAgent:
                 logger.warning(f"LLM调用失败 (attempt {attempt + 1}/3): {e}")
 
             if attempt < 2:
-                await asyncio.sleep(2 ** attempt)  # 1s, 2s
+                await asyncio.sleep(2**attempt)  # 1s, 2s
 
         # Fallback to backup LLM
         logger.warning("主模型全部重试失败，切换备选模型")
         try:
             backup = self._get_backup_llm()
-            response = await asyncio.wait_for(
-                backup.ainvoke(messages), timeout=60
-            )
-            return response.content if hasattr(response, 'content') else str(response)
+            response = await asyncio.wait_for(backup.ainvoke(messages), timeout=60)
+            return response.content if hasattr(response, "content") else str(response)
         except Exception as e:
             logger.error(f"备选模型也失败: {e}")
             return f"LLM调用失败: 主模型({last_error}), 备选模型({e})"
 
-    def make_message(self, agent_name: str, role: AgentRole, content: str,
-                     status: AgentStatus = AgentStatus.COMPLETED,
-                     confidence: float = 0.0,
-                     data: Optional[Dict] = None,
-                     thinking: Optional[str] = None) -> AgentMessage:
+    def make_message(
+        self,
+        agent_name: str,
+        role: AgentRole,
+        content: str,
+        status: AgentStatus = AgentStatus.COMPLETED,
+        confidence: float = 0.0,
+        data: Optional[Dict] = None,
+        thinking: Optional[str] = None,
+    ) -> AgentMessage:
         return AgentMessage(
             agent=agent_name,
             role=role,
@@ -109,5 +111,5 @@ class BaseAgent:
             timestamp=datetime.now().strftime("%H:%M:%S"),
             confidence=confidence,
             data=data,
-            thinking=thinking
+            thinking=thinking,
         )

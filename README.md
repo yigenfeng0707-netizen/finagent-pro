@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Node.js 18+](https://img.shields.io/badge/node.js-18+-green.svg)](https://nodejs.org/)
+[![CI](https://github.com/yigenfeng0707-netizen/finagent-pro/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/yigenfeng0707-netizen/finagent-pro/actions/workflows/ci-cd.yml)
 
 > 基于国产大模型的多Agent智能投顾系统 | **AFAC2026 金融智能创新大赛 方向四: 前沿技术 - Agentic AI**
 

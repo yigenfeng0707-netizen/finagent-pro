@@ -1,8 +1,9 @@
-from fastapi import Request, HTTPException
-from fastapi.responses import JSONResponse
 import time
 import uuid
 from collections import defaultdict
+
+from fastapi import HTTPException, Request
+from fastapi.responses import JSONResponse
 
 
 class InMemoryRateLimiter:
@@ -32,10 +33,10 @@ def get_client_key(request: Request) -> str:
 
 
 RATE_LIMITS = {
-    "/api/auth": (10, 60),       # 10 requests per minute for auth
+    "/api/auth": (10, 60),  # 10 requests per minute for auth
     "/api/orchestrate": (5, 60),  # 5 per minute for orchestration
-    "/api/chat": (10, 60),       # 10 per minute for chat
-    "default": (30, 60),         # 30 per minute for other endpoints
+    "/api/chat": (10, 60),  # 10 per minute for chat
+    "default": (30, 60),  # 30 per minute for other endpoints
 }
 
 

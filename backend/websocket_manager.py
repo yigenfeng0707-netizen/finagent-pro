@@ -1,10 +1,10 @@
 import asyncio
 import json
-from typing import Set, Dict, Any
-from fastapi import WebSocket, WebSocketDisconnect
-from models.schemas import AgentMessage
-from loguru import logger
+from typing import Any, Dict, Set
 
+from fastapi import WebSocket, WebSocketDisconnect
+from loguru import logger
+from models.schemas import AgentMessage
 
 MAX_CONNECTIONS_PER_SESSION = 5
 
@@ -36,10 +36,7 @@ class WebSocketManager:
     async def broadcast(self, session_id: str, message: AgentMessage):
         if session_id not in self.active_connections:
             return
-        payload = {
-            "type": "agent_progress",
-            "payload": message.model_dump()
-        }
+        payload = {"type": "agent_progress", "payload": message.model_dump()}
         dead_connections = set()
         for ws in self.active_connections[session_id]:
             try:
@@ -54,10 +51,7 @@ class WebSocketManager:
     async def broadcast_status(self, session_id: str, status: str, message: str = ""):
         if session_id not in self.active_connections:
             return
-        payload = {
-            "type": "status",
-            "payload": {"status": status, "message": message}
-        }
+        payload = {"type": "status", "payload": {"status": status, "message": message}}
         dead = set()
         for ws in self.active_connections[session_id]:
             try:
@@ -70,10 +64,7 @@ class WebSocketManager:
     async def broadcast_final(self, session_id: str, report: Dict[str, Any]):
         if session_id not in self.active_connections:
             return
-        payload = {
-            "type": "final_report",
-            "payload": report
-        }
+        payload = {"type": "final_report", "payload": report}
         dead = set()
         for ws in self.active_connections[session_id]:
             try:

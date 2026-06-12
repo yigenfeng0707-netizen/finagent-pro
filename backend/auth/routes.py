@@ -1,17 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel, field_validator
 import re
 import uuid
 
+from auth.dependencies import get_current_user
+from auth.jwt import create_access_token, create_refresh_token, verify_token
+from auth.password import hash_password, verify_password
 from database import get_db
 from database.crud import (
-    get_user_by_email, get_user_by_username, create_user, create_session,
-    revoke_user_sessions, update_user_login, create_audit_log,
+    create_audit_log,
+    create_session,
+    create_user,
+    get_user_by_email,
+    get_user_by_username,
+    revoke_user_sessions,
+    update_user_login,
 )
-from auth.password import hash_password, verify_password
-from auth.jwt import create_access_token, create_refresh_token, verify_token
-from auth.dependencies import get_current_user
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, field_validator
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 
@@ -91,17 +96,22 @@ async def register(request: RegisterRequest, req: Request, db: AsyncSession = De
 
     access_token = create_access_token(user.id, user.role)
     refresh_token = create_refresh_token(user.id)
-    await create_session(db, user.id, access_token, refresh_token,
-                         ip=req.client.host if req.client else None,
-                         ua=req.headers.get("user-agent"))
-    await create_audit_log(db, user.id, "register", ip=req.client.host if req.client else None,
-                           ua=req.headers.get("user-agent"))
+    await create_session(
+        db,
+        user.id,
+        access_token,
+        refresh_token,
+        ip=req.client.host if req.client else None,
+        ua=req.headers.get("user-agent"),
+    )
+    await create_audit_log(
+        db, user.id, "register", ip=req.client.host if req.client else None, ua=req.headers.get("user-agent")
+    )
 
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
-        user={"id": str(user.id), "email": user.email, "username": user.username,
-              "role": user.role, "plan": user.plan}
+        user={"id": str(user.id), "email": user.email, "username": user.username, "role": user.role, "plan": user.plan},
     )
 
 
@@ -115,18 +125,23 @@ async def login(request: LoginRequest, req: Request, db: AsyncSession = Depends(
 
     access_token = create_access_token(user.id, user.role)
     refresh_token = create_refresh_token(user.id)
-    await create_session(db, user.id, access_token, refresh_token,
-                         ip=req.client.host if req.client else None,
-                         ua=req.headers.get("user-agent"))
+    await create_session(
+        db,
+        user.id,
+        access_token,
+        refresh_token,
+        ip=req.client.host if req.client else None,
+        ua=req.headers.get("user-agent"),
+    )
     await update_user_login(db, user.id)
-    await create_audit_log(db, user.id, "login", ip=req.client.host if req.client else None,
-                           ua=req.headers.get("user-agent"))
+    await create_audit_log(
+        db, user.id, "login", ip=req.client.host if req.client else None, ua=req.headers.get("user-agent")
+    )
 
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
-        user={"id": str(user.id), "email": user.email, "username": user.username,
-              "role": user.role, "plan": user.plan}
+        user={"id": str(user.id), "email": user.email, "username": user.username, "role": user.role, "plan": user.plan},
     )
 
 
@@ -137,21 +152,26 @@ async def refresh_token(refresh_req: RefreshTokenRequest, req: Request, db: Asyn
         raise HTTPException(status_code=401, detail="Invalid refresh token")
     user_id = payload.get("sub")
     from database.crud import get_user_by_id
+
     user = await get_user_by_id(db, uuid.UUID(user_id))
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User not found or disabled")
 
     access_token = create_access_token(user.id, user.role)
     refresh_token = create_refresh_token(user.id)
-    await create_session(db, user.id, access_token, refresh_token,
-                         ip=req.client.host if req.client else None,
-                         ua=req.headers.get("user-agent"))
+    await create_session(
+        db,
+        user.id,
+        access_token,
+        refresh_token,
+        ip=req.client.host if req.client else None,
+        ua=req.headers.get("user-agent"),
+    )
 
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
-        user={"id": str(user.id), "email": user.email, "username": user.username,
-              "role": user.role, "plan": user.plan}
+        user={"id": str(user.id), "email": user.email, "username": user.username, "role": user.role, "plan": user.plan},
     )
 
 

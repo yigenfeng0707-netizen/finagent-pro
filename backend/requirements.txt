@@ -22,16 +22,6 @@ python-jose[cryptography]>=3.3.0
 bcrypt>=4.0.0
 PyJWT>=2.9.0
 
-# 异步任务
-# [未使用] celery>=5.4.0
-# [未使用] nest-asyncio>=1.6.0
-
-# 监控
-# [未使用] prometheus-client>=0.21.0
-# [未使用] opentelemetry-api>=1.28.0
-# [未使用] opentelemetry-sdk>=1.28.0
-# [未使用] opentelemetry-instrumentation-fastapi>=0.49b0
-
 # 金融数据
 akshare>=1.15.0
 pandas>=2.2.0
@@ -46,9 +36,6 @@ python-dotenv>=1.0.0
 requests>=2.32.0
 aiohttp>=3.9.0
 
-# 新闻数据
-# [未使用] finnhub-python>=2.4.0
-
 # 测试
 pytest>=8.0.0
 pytest-asyncio>=0.24.0
@@ -59,15 +46,3 @@ websockets>=12.0
 
 # 日志
 loguru>=0.7.0
-
-# 速率限制
-# [未使用] slowapi>=0.1.9
-
-# Email (smtplib is part of the Python standard library, no pip install needed)
-
-# 邮件模板
-# [未使用] jinja2>=3.1.0
-
-# 代码格式化
-black>=24.0.0
-isort>=5.13.0

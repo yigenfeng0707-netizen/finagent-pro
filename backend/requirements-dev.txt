@@ -1,0 +1,10 @@
+# FinAgent Pro 开发依赖
+-r requirements.txt
+
+# 代码格式化
+black>=24.0.0
+isort>=5.13.0
+
+# 代码质量
+mypy>=1.10.0
+ruff>=0.4.0

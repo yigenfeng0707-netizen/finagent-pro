@@ -1,33 +1,38 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Request
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
-import os
 import asyncio
+import os
 import uuid
+from contextlib import asynccontextmanager
+
 import pandas as pd
 import sqlalchemy as db
-from dotenv import load_dotenv
-from contextlib import asynccontextmanager
-from loguru import logger
-
-from models.schemas import (
-    ChatRequest, StockAnalysisRequest, PortfolioRequest,
-    RiskAnalysisRequest, OrchestratorRequest, OrchestratorResponse,
-    FinalReport
-)
-from services.market_data import MarketDataService
-from knowledge.finance_kb import FinanceKnowledgeBase
-from orchestrator import AgentOrchestrator
-from websocket_manager import WebSocketManager
+import uvicorn
 from auth.routes import router as auth_router
+from dotenv import load_dotenv
+from exception_handlers import AgentExecutionError, DataFetchError, LLMError, setup_exception_handlers
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from knowledge.finance_kb import FinanceKnowledgeBase
+from loguru import logger
 from middleware import rate_limit_middleware
-from exception_handlers import setup_exception_handlers, AgentExecutionError, DataFetchError, LLMError
+from models.schemas import (
+    ChatRequest,
+    FinalReport,
+    OrchestratorRequest,
+    OrchestratorResponse,
+    PortfolioRequest,
+    RiskAnalysisRequest,
+    StockAnalysisRequest,
+)
+from orchestrator import AgentOrchestrator
+from services.market_data import MarketDataService
+from websocket_manager import WebSocketManager
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from database import get_engine, Base
     from auth.jwt import validate_jwt_config
+    from database import Base, get_engine
+
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -50,8 +55,7 @@ load_dotenv()
 
 ENV = os.getenv("ENV", "development")
 ALLOWED_ORIGINS = os.getenv(
-    "ALLOWED_ORIGINS",
-    "http://localhost:3000,http://localhost:8000,https://finagent.example.com"
+    "ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000,https://finagent.example.com"
 ).split(",")
 
 app = FastAPI(
@@ -87,20 +91,24 @@ async def optional_auth(request: Request):
     """演示模式可选认证，生产环境强制认证"""
     if os.getenv("ENV", "development") == "production":
         from auth.jwt import verify_token
+
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
             from fastapi import HTTPException
+
             raise HTTPException(status_code=401, detail="需要认证")
         token = auth_header.split(" ", 1)[1]
         payload = verify_token(token)
         if not payload:
             from fastapi import HTTPException
+
             raise HTTPException(status_code=401, detail="Token无效或已过期")
         return payload
     return None  # 开发/演示模式跳过认证
 
 
 # ========== WebSocket端点 ==========
+
 
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
@@ -114,13 +122,14 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
 # ========== REST API ==========
 
+
 @app.get("/")
 async def root():
     return {
         "name": "FinAgent Pro",
         "version": "2.0.0",
         "description": "多Agent智能投顾系统 - AFAC2026 方向四: Agentic AI",
-        "status": "running"
+        "status": "running",
     }
 
 
@@ -129,6 +138,7 @@ async def health_check():
     db_ok, redis_ok = True, True
     try:
         from database import get_session_maker
+
         async with get_session_maker()() as sess:
             await sess.execute(db.text("SELECT 1"))
     except Exception:
@@ -136,10 +146,8 @@ async def health_check():
 
     try:
         import redis.asyncio as aioredis
-        r = await aioredis.from_url(
-            os.getenv("REDIS_URL", "redis://localhost:6379/0"),
-            socket_connect_timeout=2
-        )
+
+        r = await aioredis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"), socket_connect_timeout=2)
         await r.ping()
         await r.aclose()
     except Exception:
@@ -153,7 +161,7 @@ async def health_check():
             "database": "ok" if db_ok else "fail",
             "redis": "ok" if redis_ok else "fail",
             "chromadb": "ok" if finance_kb._collection is not None else "lazy",
-        }
+        },
     }
 
 
@@ -161,7 +169,7 @@ async def health_check():
 async def orchestrate(request: OrchestratorRequest, auth=Depends(optional_auth)):
     """
     多Agent协作分析入口
-    
+
     接收用户请求 → Orchestrator拆解任务 → 链式调用4个Agent → 返回综合报告
     """
     try:
@@ -179,7 +187,7 @@ async def orchestrate(request: OrchestratorRequest, auth=Depends(optional_auth))
                 investment_amount=request.investment_amount,
                 risk_preference=request.risk_preference,
                 market=request.market,
-                session_id=session_id
+                session_id=session_id,
             ):
                 agent_messages.append(msg)
         finally:
@@ -198,15 +206,16 @@ async def orchestrate(request: OrchestratorRequest, auth=Depends(optional_auth))
 
 def _build_sync_context(agent_messages, request):
     from models.schemas import AgentContext
+
     ctx = AgentContext(
         user_input=f"分析{'/'.join(request.symbols)}",
         symbols=request.symbols,
         risk_preference=request.risk_preference,
         investment_amount=request.investment_amount,
-        market=request.market
+        market=request.market,
     )
     for msg in agent_messages:
-        role = msg.role if hasattr(msg, 'role') else ""
+        role = msg.role if hasattr(msg, "role") else ""
         if role:
             ctx.results[f"{role}_analysis"] = msg
     return ctx
@@ -232,7 +241,7 @@ async def chat(request: ChatRequest, auth=Depends(optional_auth)):
                 "type": "general",
                 "session_id": session_id,
                 "message": "您好！我是FinAgent Pro智能投顾助手。请告诉我您想分析哪只港股？"
-                           "例如: 分析腾讯、阿里怎么样、帮我看看美团"
+                "例如: 分析腾讯、阿里怎么样、帮我看看美团",
             }
 
         risk_pref = "moderate"
@@ -250,30 +259,20 @@ async def chat(request: ChatRequest, auth=Depends(optional_auth)):
 
         try:
             async for agent_msg in orchestrator.run(
-                symbols=symbols,
-                investment_amount=100000,
-                risk_preference=risk_pref,
-                market="hk",
-                session_id=session_id
+                symbols=symbols, investment_amount=100000, risk_preference=risk_pref, market="hk", session_id=session_id
             ):
                 agent_messages.append(agent_msg)
         finally:
             orchestrator.remove_progress(session_id)
 
         from types import SimpleNamespace
-        req_obj = SimpleNamespace(
-            symbols=symbols, risk_preference=risk_pref,
-            investment_amount=100000, market='hk'
-        )
+
+        req_obj = SimpleNamespace(symbols=symbols, risk_preference=risk_pref, investment_amount=100000, market="hk")
         ctx = _build_sync_context(agent_messages, req_obj)
         report = orchestrator.synthesize_report(ctx)
         await ws_manager.broadcast_final(session_id, report.model_dump())
 
-        return {
-            "type": "analysis_complete",
-            "session_id": session_id,
-            "data": report.model_dump()
-        }
+        return {"type": "analysis_complete", "session_id": session_id, "data": report.model_dump()}
 
     except Exception as e:
         raise AgentExecutionError("chat", str(e))
@@ -299,13 +298,9 @@ async def create_portfolio(request: PortfolioRequest, auth=Depends(optional_auth
         result = await orchestrator.portfolio_advisor.advise(
             risk_profile=request.risk_profile,
             investment_amount=request.investment_amount,
-            investment_horizon=request.investment_horizon
+            investment_horizon=request.investment_horizon,
         )
-        return {
-            "success": True,
-            "portfolio": result.data,
-            "recommendation": result.content
-        }
+        return {"success": True, "portfolio": result.data, "recommendation": result.content}
     except Exception as e:
         raise AgentExecutionError("portfolio_advisor", str(e))
 
@@ -315,11 +310,7 @@ async def analyze_risk(request: RiskAnalysisRequest, auth=Depends(optional_auth)
     """风险分析"""
     try:
         result = await orchestrator.risk_manager.analyze(symbols=request.portfolio)
-        return {
-            "success": True,
-            "risk_data": result.data,
-            "analysis": result.content
-        }
+        return {"success": True, "risk_data": result.data, "analysis": result.content}
     except Exception as e:
         raise AgentExecutionError("risk_manager", str(e))
 
@@ -333,11 +324,15 @@ async def get_stock_history(symbol: str, market: str = "hk", days: int = 180):
             raise HTTPException(status_code=404, detail="股票数据未找到")
         indicators = market_service.calculate_technical_indicators(df)  # modifies df in-place, returns Dict summary
         data = {
-            "dates": df['日期'].dt.strftime('%Y-%m-%d').tolist() if '日期' in df.columns else df.index.strftime('%Y-%m-%d').tolist(),
-            "prices": df['收盘'].tolist() if '收盘' in df.columns else df['close'].tolist(),
-            "volumes": df['成交量'].tolist() if '成交量' in df.columns else df['volume'].tolist(),
+            "dates": (
+                df["日期"].dt.strftime("%Y-%m-%d").tolist()
+                if "日期" in df.columns
+                else df.index.strftime("%Y-%m-%d").tolist()
+            ),
+            "prices": df["收盘"].tolist() if "收盘" in df.columns else df["close"].tolist(),
+            "volumes": df["成交量"].tolist() if "成交量" in df.columns else df["volume"].tolist(),
         }
-        for col in ['MA5', 'MA10', 'MA20', 'MA60']:
+        for col in ["MA5", "MA10", "MA20", "MA60"]:
             if col in df.columns:
                 data[col.lower()] = [None if pd.isna(v) else round(float(v), 2) for v in df[col].tolist()]
         data["indicators"] = indicators
@@ -353,8 +348,9 @@ async def get_hk_spot():
     """港股实时行情"""
     try:
         import akshare as ak
+
         df = await asyncio.to_thread(ak.stock_hk_spot_em)
-        stocks = df.head(20).to_dict(orient='records')
+        stocks = df.head(20).to_dict(orient="records")
         return {"success": True, "data": stocks}
     except Exception as e:
         raise DataFetchError("hk_spot", str(e))

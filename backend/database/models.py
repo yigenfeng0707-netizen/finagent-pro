@@ -1,14 +1,11 @@
 import enum
 import uuid
 from datetime import datetime
-from sqlalchemy import (
-    Column, String, Text, Float, Integer, Boolean, DateTime, Enum,
-    ForeignKey, JSON, Index
-)
-from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import UUID
 
 from database import Base
+from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 
 
 class User(Base):
@@ -65,9 +62,7 @@ class AnalysisRecord(Base):
 
     user = relationship("User", back_populates="analysis_records")
 
-    __table_args__ = (
-        Index("idx_analysis_user_created", "user_id", "created_at"),
-    )
+    __table_args__ = (Index("idx_analysis_user_created", "user_id", "created_at"),)
 
 
 class Subscription(Base):

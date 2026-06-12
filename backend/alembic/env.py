@@ -1,8 +1,9 @@
-from logging.config import fileConfig
-from sqlalchemy import engine_from_config, pool
-from alembic import context
-import sys
 import os
+import sys
+from logging.config import fileConfig
+
+from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -11,6 +12,13 @@ from database.models import Base
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# 从环境变量注入数据库URL，覆盖 alembic.ini 中的占位符
+db_url = os.environ.get("DATABASE_URL")
+if db_url:
+    # Alembic 使用同步驱动，将 asyncpg 替换为 psycopg2
+    sync_url = db_url.replace("+asyncpg", "+psycopg2").replace("postgresql+psycopg2", "postgresql+psycopg2")
+    config.set_main_option("sqlalchemy.url", sync_url)
 
 target_metadata = Base.metadata
 

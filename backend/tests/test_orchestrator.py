@@ -1,21 +1,22 @@
-import pytest
 import asyncio
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from models.schemas import AgentContext, AgentMessage, AgentRole, AgentStatus
 from orchestrator import AgentOrchestrator
-from models.schemas import AgentMessage, AgentRole, AgentStatus, AgentContext
 
 
 @pytest.fixture
 def orchestrator():
-    with patch('orchestrator.MarketAnalyst') as MockMA, \
-         patch('orchestrator.RiskManager') as MockRM, \
-         patch('orchestrator.PortfolioAdvisor') as MockPA, \
-         patch('orchestrator.SentimentScanner') as MockSS, \
-         patch('orchestrator.FinanceKnowledgeBase'):
+    with patch("orchestrator.MarketAnalyst") as MockMA, patch("orchestrator.RiskManager") as MockRM, patch(
+        "orchestrator.PortfolioAdvisor"
+    ) as MockPA, patch("orchestrator.SentimentScanner") as MockSS, patch("orchestrator.FinanceKnowledgeBase"):
         mock_msg = AgentMessage(
-            agent="test", role=AgentRole.MARKET_ANALYST,
-            content="test content", status=AgentStatus.COMPLETED,
-            data={"current_price": 100}
+            agent="test",
+            role=AgentRole.MARKET_ANALYST,
+            content="test content",
+            status=AgentStatus.COMPLETED,
+            data={"current_price": 100},
         )
         MockMA.return_value.analyze = AsyncMock(return_value=mock_msg)
         MockSS.return_value.scan = AsyncMock(return_value=mock_msg)
@@ -28,8 +29,7 @@ def orchestrator():
 async def test_orchestrator_run_yields_messages(orchestrator):
     messages = []
     async for msg in orchestrator.run(
-        symbols=["00700"], investment_amount=100000,
-        risk_preference="moderate", session_id="test_session"
+        symbols=["00700"], investment_amount=100000, risk_preference="moderate", session_id="test_session"
     ):
         messages.append(msg)
 
@@ -58,8 +58,7 @@ async def test_orchestrator_empty_symbols_raises(orchestrator):
     messages = []
     try:
         async for msg in orchestrator.run(
-            symbols=[], investment_amount=100000,
-            risk_preference="moderate", session_id="test_empty"
+            symbols=[], investment_amount=100000, risk_preference="moderate", session_id="test_empty"
         ):
             messages.append(msg)
     except (ZeroDivisionError, IndexError):
@@ -73,11 +72,13 @@ def test_synthesize_report_partial_results(orchestrator):
         symbols=["00700"],
         results={
             "market_analysis": AgentMessage(
-                agent="市场分析师", role=AgentRole.MARKET_ANALYST,
-                content="市场看好", status=AgentStatus.COMPLETED,
-                data={"current_price": 350}
+                agent="市场分析师",
+                role=AgentRole.MARKET_ANALYST,
+                content="市场看好",
+                status=AgentStatus.COMPLETED,
+                data={"current_price": 350},
             ),
-        }
+        },
     )
     report = orchestrator.synthesize_report(ctx)
     assert len(report.agent_messages) == 1  # Should preserve partial results
@@ -87,18 +88,28 @@ def test_synthesize_report_partial_results(orchestrator):
 
 def test_synthesize_report_dynamic_confidence(orchestrator):
     """Confidence should not be hardcoded to 0.78"""
-    ctx_low = AgentContext(user_input="test", symbols=["00700"], results={
-        "risk_analysis": AgentMessage(agent="r", role=AgentRole.RISK_MANAGER,
-                                       content="高风险", data={"risk_level": 85})
-    })
-    ctx_high = AgentContext(user_input="test", symbols=["00700"], results={
-        "risk_analysis": AgentMessage(agent="r", role=AgentRole.RISK_MANAGER,
-                                       content="低风险", data={"risk_level": 20}),
-        "sentiment_analysis": AgentMessage(agent="s", role=AgentRole.SENTIMENT_SCANNER,
-                                            content="乐观", data={"fear_greed_index": 75}),
-        "market_analysis": AgentMessage(agent="m", role=AgentRole.MARKET_ANALYST,
-                                         content="建议买入", data={})
-    })
+    ctx_low = AgentContext(
+        user_input="test",
+        symbols=["00700"],
+        results={
+            "risk_analysis": AgentMessage(
+                agent="r", role=AgentRole.RISK_MANAGER, content="高风险", data={"risk_level": 85}
+            )
+        },
+    )
+    ctx_high = AgentContext(
+        user_input="test",
+        symbols=["00700"],
+        results={
+            "risk_analysis": AgentMessage(
+                agent="r", role=AgentRole.RISK_MANAGER, content="低风险", data={"risk_level": 20}
+            ),
+            "sentiment_analysis": AgentMessage(
+                agent="s", role=AgentRole.SENTIMENT_SCANNER, content="乐观", data={"fear_greed_index": 75}
+            ),
+            "market_analysis": AgentMessage(agent="m", role=AgentRole.MARKET_ANALYST, content="建议买入", data={}),
+        },
+    )
     report_low = orchestrator.synthesize_report(ctx_low)
     report_high = orchestrator.synthesize_report(ctx_high)
     # Different scenarios should produce different confidence values

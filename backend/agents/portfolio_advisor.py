@@ -1,7 +1,9 @@
-from .base_agent import BaseAgent
-from models.schemas import AgentRole, AgentStatus, AgentMessage
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
+
 from loguru import logger
+from models.schemas import AgentMessage, AgentRole, AgentStatus
+
+from .base_agent import BaseAgent
 
 
 class PortfolioAdvisor(BaseAgent):
@@ -11,17 +13,21 @@ class PortfolioAdvisor(BaseAgent):
             role="资深资产配置专家",
             goal="根据投资者风险偏好和目标，提供最优资产配置方案",
             backstory="你是一位拥有CFA证书的资深资产配置专家，曾在全球顶级资管公司工作。"
-                       "你精通现代投资组合理论、马科维茨模型、黑-李特曼模型等资产配置方法。"
-                       "你善于根据投资者的风险承受能力、投资期限、收益目标，定制个性化投资方案。"
+            "你精通现代投资组合理论、马科维茨模型、黑-李特曼模型等资产配置方法。"
+            "你善于根据投资者的风险承受能力、投资期限、收益目标，定制个性化投资方案。",
         )
 
-    async def advise(self, risk_profile: str, investment_amount: float,
-                     investment_horizon: str = "medium",
-                     symbols: Optional[List[str]] = None,
-                     context: Optional[Dict[str, Any]] = None,
-                     market_analysis: Optional[AgentMessage] = None,
-                     risk_analysis: Optional[AgentMessage] = None,
-                     sentiment_analysis: Optional[AgentMessage] = None) -> AgentMessage:
+    async def advise(
+        self,
+        risk_profile: str,
+        investment_amount: float,
+        investment_horizon: str = "medium",
+        symbols: Optional[List[str]] = None,
+        context: Optional[Dict[str, Any]] = None,
+        market_analysis: Optional[AgentMessage] = None,
+        risk_analysis: Optional[AgentMessage] = None,
+        sentiment_analysis: Optional[AgentMessage] = None,
+    ) -> AgentMessage:
         try:
             profile_map = {"conservative": "保守型", "moderate": "稳健型", "aggressive": "进取型"}
             horizon_map = {"short": "短期(1年内)", "medium": "中期(1-3年)", "long": "长期(3年以上)"}
@@ -31,23 +37,43 @@ class PortfolioAdvisor(BaseAgent):
             allocation_templates = {
                 "conservative": {"stocks": 30, "bonds": 50, "cash": 15, "gold": 5, "exp_return": 5.0, "vol": 8.0},
                 "moderate": {"stocks": 50, "bonds": 35, "cash": 10, "gold": 5, "exp_return": 8.0, "vol": 15.0},
-                "aggressive": {"stocks": 70, "bonds": 20, "cash": 5, "gold": 5, "exp_return": 12.0, "vol": 25.0}
+                "aggressive": {"stocks": 70, "bonds": 20, "cash": 5, "gold": 5, "exp_return": 12.0, "vol": 25.0},
             }
             tmpl = allocation_templates.get(risk_profile, allocation_templates["moderate"])
             if investment_horizon == "long":
-                tmpl["stocks"] += 5; tmpl["bonds"] -= 5; tmpl["exp_return"] += 1.0
+                tmpl["stocks"] += 5
+                tmpl["bonds"] -= 5
+                tmpl["exp_return"] += 1.0
             elif investment_horizon == "short":
-                tmpl["stocks"] -= 5; tmpl["cash"] += 5; tmpl["exp_return"] -= 1.0
+                tmpl["stocks"] -= 5
+                tmpl["cash"] += 5
+                tmpl["exp_return"] -= 1.0
 
             portfolio_allocation = [
-                {"symbol": "STOCKS", "name": "股票", "weight": tmpl["stocks"],
-                 "amount": round(investment_amount * tmpl["stocks"] / 100, 2)},
-                {"symbol": "BONDS", "name": "债券", "weight": tmpl["bonds"],
-                 "amount": round(investment_amount * tmpl["bonds"] / 100, 2)},
-                {"symbol": "CASH", "name": "现金", "weight": tmpl["cash"],
-                 "amount": round(investment_amount * tmpl["cash"] / 100, 2)},
-                {"symbol": "GOLD", "name": "黄金", "weight": tmpl["gold"],
-                 "amount": round(investment_amount * tmpl["gold"] / 100, 2)},
+                {
+                    "symbol": "STOCKS",
+                    "name": "股票",
+                    "weight": tmpl["stocks"],
+                    "amount": round(investment_amount * tmpl["stocks"] / 100, 2),
+                },
+                {
+                    "symbol": "BONDS",
+                    "name": "债券",
+                    "weight": tmpl["bonds"],
+                    "amount": round(investment_amount * tmpl["bonds"] / 100, 2),
+                },
+                {
+                    "symbol": "CASH",
+                    "name": "现金",
+                    "weight": tmpl["cash"],
+                    "amount": round(investment_amount * tmpl["cash"] / 100, 2),
+                },
+                {
+                    "symbol": "GOLD",
+                    "name": "黄金",
+                    "weight": tmpl["gold"],
+                    "amount": round(investment_amount * tmpl["gold"] / 100, 2),
+                },
             ]
 
             symbol_context = ""
@@ -108,9 +134,9 @@ class PortfolioAdvisor(BaseAgent):
                     "expected_return": tmpl["exp_return"],
                     "expected_volatility": tmpl["vol"],
                     "risk_profile": risk_profile,
-                    "investment_amount": investment_amount
+                    "investment_amount": investment_amount,
                 },
-                thinking=thinking
+                thinking=thinking,
             )
 
         except Exception as e:
@@ -120,5 +146,5 @@ class PortfolioAdvisor(BaseAgent):
                 role=AgentRole.PORTFOLIO_ADVISOR,
                 content=f"组合顾问遇到异常: {type(e).__name__}: {str(e)}",
                 status=AgentStatus.FAILED,
-                data={"error": str(e)}
+                data={"error": str(e)},
             )
