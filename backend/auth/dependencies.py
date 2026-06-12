@@ -4,7 +4,7 @@ from typing import Optional
 from auth.jwt import verify_token
 from database import get_db
 from database.crud import get_session_by_access_token, get_user_by_id
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 

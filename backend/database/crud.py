@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from database.models import AnalysisRecord, ApiUsage, AuditLog, Session, Subscription, User
+from database.models import AnalysisRecord, ApiUsage, AuditLog, Session, User
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -73,7 +73,7 @@ async def get_session_by_access_token(db: AsyncSession, token: str) -> Optional[
     result = await db.execute(
         select(Session)
         .options(selectinload(Session.user))
-        .where(Session.access_token == token, Session.revoked == False, Session.expires_at > datetime.utcnow())
+        .where(Session.access_token == token, ~Session.revoked, Session.expires_at > datetime.utcnow())
     )
     return result.scalar_one_or_none()
 

@@ -1,5 +1,4 @@
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from models.schemas import AgentContext, AgentMessage, AgentRole, AgentStatus

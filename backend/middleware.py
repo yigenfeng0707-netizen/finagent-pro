@@ -2,7 +2,7 @@ import time
 import uuid
 from collections import defaultdict
 
-from fastapi import HTTPException, Request
+from fastapi import Request
 from fastapi.responses import JSONResponse
 
 

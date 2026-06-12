@@ -1,8 +1,7 @@
 import asyncio
-import json
 from typing import Any, Dict, Set
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket
 from loguru import logger
 from models.schemas import AgentMessage
 

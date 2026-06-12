@@ -1,7 +1,7 @@
 import asyncio
 import uuid
 from datetime import datetime
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional
+from typing import AsyncIterator, Callable, Dict, List
 
 from agents import MarketAnalyst, PortfolioAdvisor, RiskManager, SentimentScanner
 from knowledge.finance_kb import FinanceKnowledgeBase
@@ -112,8 +112,8 @@ class AgentOrchestrator:
         kb_market = self.knowledge_base.get_context_for_query(
             f"港股 {symbols[0] if symbols else ''} 市场分析 技术指标", n_results=2
         )
-        kb_sentiment = self.knowledge_base.get_context_for_query(f"市场情绪 恐慌贪婪 投资心理", n_results=2)
-        kb_risk = self.knowledge_base.get_context_for_query(f"风险管理 止损 VaR 波动率", n_results=2)
+        kb_sentiment = self.knowledge_base.get_context_for_query("市场情绪 恐慌贪婪 投资心理", n_results=2)
+        kb_risk = self.knowledge_base.get_context_for_query("风险管理 止损 VaR 波动率", n_results=2)
         kb_portfolio = self.knowledge_base.get_context_for_query(
             f"资产配置 {risk_preference}型投资者 组合优化", n_results=2
         )
@@ -158,7 +158,7 @@ class AgentOrchestrator:
         step2_msg = AgentMessage(
             agent="编排器",
             role=AgentRole.ORCHESTRATOR,
-            content=f"步骤2/4: 启动情绪扫描器 → 基于市场分析扫描情绪",
+            content="步骤2/4: 启动情绪扫描器 → 基于市场分析扫描情绪",
             status=AgentStatus.RUNNING,
             timestamp=datetime.now().strftime("%H:%M:%S"),
         )

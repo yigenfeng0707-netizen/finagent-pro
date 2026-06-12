@@ -17,7 +17,7 @@ class SessionMemory:
 
     def _session_path(self, session_id: str) -> str:
         if not _SESSION_ID_RE.match(session_id):
-            raise ValueError(f"非法session_id: 仅允许字母、数字、下划线和短横线")
+            raise ValueError("非法session_id: 仅允许字母、数字、下划线和短横线")
         return os.path.join(self.persist_dir, f"{session_id}.json")
 
     def save_session(self, session_id: str, data: Dict[str, Any]):

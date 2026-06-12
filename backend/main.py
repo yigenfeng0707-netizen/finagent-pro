@@ -8,7 +8,7 @@ import sqlalchemy as db
 import uvicorn
 from auth.routes import router as auth_router
 from dotenv import load_dotenv
-from exception_handlers import AgentExecutionError, DataFetchError, LLMError, setup_exception_handlers
+from exception_handlers import AgentExecutionError, DataFetchError, setup_exception_handlers
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from knowledge.finance_kb import FinanceKnowledgeBase
@@ -16,7 +16,6 @@ from loguru import logger
 from middleware import rate_limit_middleware
 from models.schemas import (
     ChatRequest,
-    FinalReport,
     OrchestratorRequest,
     OrchestratorResponse,
     PortfolioRequest,
@@ -115,7 +114,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     await ws_manager.connect(session_id, websocket)
     try:
         while True:
-            data = await websocket.receive_text()
+            await websocket.receive_text()
     except WebSocketDisconnect:
         ws_manager.disconnect(session_id, websocket)
 
@@ -380,7 +379,7 @@ async def query_knowledge(query: str, top_k: int = 3):
 if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
-    logger.info(f"FinAgent Pro v2.0.0 启动中... (AFAC2026 方向四: Agentic AI)")
+    logger.info("FinAgent Pro v2.0.0 启动中... (AFAC2026 方向四: Agentic AI)")
     logger.info(f"服务地址: http://{host}:{port}")
     logger.info(f"API文档: http://{host}:{port}/docs")
     uvicorn.run(app, host=host, port=port)
