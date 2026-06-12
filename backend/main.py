@@ -281,7 +281,7 @@ async def chat(request: ChatRequest, auth=Depends(optional_auth)):
 async def analyze_stock(request: StockAnalysisRequest, auth=Depends(optional_auth)):
     """单只股票快速分析"""
     if not request.symbol:
-        raise DataFetchError("stock_analyze", "股票代码不能为空")
+        raise HTTPException(status_code=400, detail="股票代码不能为空")
     try:
         agent = orchestrator.market_analyst
         result = await agent.analyze(symbol=request.symbol, market=request.market)

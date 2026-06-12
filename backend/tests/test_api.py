@@ -19,7 +19,7 @@ class TestAPI:
 
     async def test_stock_analyze_missing_symbol(self, client):
         response = await client.post("/api/stock/analyze", json={"symbol": ""})
-        assert response.status_code == 500
+        assert response.status_code == 400
 
     async def test_knowledge_query(self, client):
         response = await client.get("/api/knowledge/query?query=腾讯")

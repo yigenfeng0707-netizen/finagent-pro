@@ -2,7 +2,6 @@
 Pytest configuration with async fixtures for FastAPI + SQLAlchemy async.
 """
 
-import asyncio
 import os
 import uuid
 from datetime import datetime
@@ -22,15 +21,8 @@ TEST_DATABASE_URL = os.getenv(
 
 
 @pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest.fixture(scope="session")
 async def test_engine():
-    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+    engine = create_async_engine(TEST_DATABASE_URL, echo=False, pool_size=5, pool_pre_ping=True)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield engine
@@ -41,8 +33,8 @@ async def test_engine():
 
 @pytest.fixture
 async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
-    AsyncSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
-    async with AsyncSessionLocal() as session:
+    session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
+    async with session_factory() as session:
         yield session
 
 
@@ -67,8 +59,8 @@ async def client(test_engine):
     from main import app
 
     async def override_get_db():
-        AsyncSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
-        async with AsyncSessionLocal() as session:
+        session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
+        async with session_factory() as session:
             try:
                 yield session
             finally:
@@ -82,11 +74,14 @@ async def client(test_engine):
 
 
 @pytest.fixture
-async def auth_headers(client, test_user):
-    from auth.jwt import create_access_token
+async def auth_headers(client, test_user, db_session):
+    from auth.jwt import create_access_token, create_refresh_token
+    from database.crud import create_session
 
-    token = create_access_token(test_user.id, test_user.role)
-    return {"Authorization": f"Bearer {token}"}
+    access_token = create_access_token(test_user.id, test_user.role)
+    refresh_token = create_refresh_token(test_user.id)
+    await create_session(db_session, test_user.id, access_token, refresh_token)
+    return {"Authorization": f"Bearer {access_token}"}
 
 
 @pytest.fixture
