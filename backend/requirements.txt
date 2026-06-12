@@ -41,6 +41,7 @@ aiohttp>=3.9.0
 pytest>=8.0.0
 pytest-asyncio>=0.24.0
 pytest-cov>=5.0.0
+pytest-timeout>=2.3.0
 
 # WebSocket
 websockets>=12.0
