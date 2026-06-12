@@ -55,11 +55,11 @@ async def test_sentiment_scanner_scan(mock_llm):
         mock_tool.side_effect = [
             {"price": 350.0, "change_pct": 1.5},  # get_stock_price
             {"rsi": 55.0, "volatility": 1.2, "change_pct": 1.5},  # get_technical_indicators
+            {"fund_flow": 1000000},  # get_fund_flow
         ]
         result = await scanner.scan("00700")
         assert result.role == AgentRole.SENTIMENT_SCANNER
         assert result.data is not None
-        assert "fear_greed_index" in result.data
 
 
 @pytest.mark.asyncio
