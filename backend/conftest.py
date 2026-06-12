@@ -16,7 +16,8 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 TEST_DATABASE_URL = os.getenv(
-    "TEST_DATABASE_URL", "postgresql+asyncpg://finagent:finagent_dev@localhost:5432/finagent_pro_test"
+    "TEST_DATABASE_URL",
+    os.getenv("DATABASE_URL", "postgresql+asyncpg://finagent:finagent_dev@localhost:5432/finagent_pro_test"),
 )
 
 
