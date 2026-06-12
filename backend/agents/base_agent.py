@@ -31,16 +31,18 @@ class BaseAgent:
 
     def _create_llm(self, use_backup: bool = False) -> ChatOpenAI:
         if use_backup:
+            api_key = os.getenv("ZHIPU_API_KEY") or "sk-test-placeholder"
             return ChatOpenAI(
                 model=os.getenv("BACKUP_MODEL", "glm-4-plus"),
-                api_key=os.getenv("ZHIPU_API_KEY"),
+                api_key=api_key,
                 base_url=os.getenv("ZHIPU_API_BASE", "https://open.bigmodel.cn/api/paas/v4/"),
                 max_tokens=int(os.getenv("MAX_TOKENS", "4096")),
                 temperature=float(os.getenv("TEMPERATURE", "0.7")),
             )
+        api_key = os.getenv("DEEPSEEK_API_KEY") or "sk-test-placeholder"
         return ChatOpenAI(
             model=os.getenv("DEFAULT_MODEL", "deepseek-chat"),
-            api_key=os.getenv("DEEPSEEK_API_KEY"),
+            api_key=api_key,
             base_url=os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com/v1"),
             max_tokens=int(os.getenv("MAX_TOKENS", "4096")),
             temperature=float(os.getenv("TEMPERATURE", "0.7")),
