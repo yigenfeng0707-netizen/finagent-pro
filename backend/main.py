@@ -13,7 +13,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSock
 from fastapi.middleware.cors import CORSMiddleware
 from knowledge.finance_kb import FinanceKnowledgeBase
 from loguru import logger
-from middleware import rate_limit_middleware
+from middleware import RateLimitMiddleware
 from models.schemas import (
     ChatRequest,
     OrchestratorRequest,
@@ -75,7 +75,7 @@ app.add_middleware(
     expose_headers=["X-Request-ID", "X-RateLimit-Remaining"],
 )
 
-app.middleware("http")(rate_limit_middleware)
+app.add_middleware(RateLimitMiddleware)
 
 app.include_router(auth_router)
 setup_exception_handlers(app)

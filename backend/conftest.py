@@ -40,10 +40,11 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
 
 @pytest.fixture
 async def test_user(db_session: AsyncSession) -> User:
+    uid = str(uuid.uuid4())[:8]
     user = User(
         id=uuid.uuid4(),
-        email="test@example.com",
-        username="testuser",
+        email=f"test_{uid}@example.com",
+        username=f"testuser_{uid}",
         hashed_password=hash_password("Test1234!"),
         email_verified=True,
         created_at=datetime.utcnow(),
@@ -52,6 +53,15 @@ async def test_user(db_session: AsyncSession) -> User:
     await db_session.commit()
     await db_session.refresh(user)
     return user
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Reset rate limiter state between tests to avoid cross-test interference."""
+    from middleware import rate_limiter
+
+    rate_limiter.windows.clear()
+    yield
 
 
 @pytest.fixture
@@ -86,11 +96,12 @@ async def auth_headers(client, test_user, db_session):
 
 @pytest.fixture
 async def registered_user(client) -> dict:
+    uid = str(uuid.uuid4())[:8]
     response = await client.post(
         "/api/auth/register",
         json={
-            "email": "newuser@example.com",
-            "username": "newuser",
+            "email": f"reg_{uid}@example.com",
+            "username": f"reguser_{uid}",
             "password": "Secure1234",
         },
     )

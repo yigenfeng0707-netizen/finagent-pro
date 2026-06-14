@@ -11,11 +11,16 @@ pytestmark = pytest.mark.asyncio
 
 class TestAuth:
     async def test_register_success(self, client):
+        import uuid as _uuid
+
+        uid = str(_uuid.uuid4())[:8]
+        email = f"alice_{uid}@test.com"
+        username = f"alice_{uid}"
         resp = await client.post(
             "/api/auth/register",
             json={
-                "email": "alice@test.com",
-                "username": "alice",
+                "email": email,
+                "username": username,
                 "password": "StrongPass1",
             },
         )
@@ -23,13 +28,13 @@ class TestAuth:
         data = resp.json()
         assert "access_token" in data
         assert "refresh_token" in data
-        assert data["user"]["email"] == "alice@test.com"
+        assert data["user"]["email"] == email
 
     async def test_register_duplicate_email(self, client, registered_user):
         resp = await client.post(
             "/api/auth/register",
             json={
-                "email": "newuser@example.com",
+                "email": registered_user["user"]["email"],
                 "username": "another",
                 "password": "StrongPass1",
             },
@@ -59,23 +64,24 @@ class TestAuth:
         assert resp.status_code == 422
 
     async def test_login_success(self, client, registered_user):
+        email = registered_user["user"]["email"]
         resp = await client.post(
             "/api/auth/login",
             json={
-                "email": "newuser@example.com",
+                "email": email,
                 "password": "Secure1234",
             },
         )
         assert resp.status_code == 200
         data = resp.json()
         assert "access_token" in data
-        assert data["user"]["email"] == "newuser@example.com"
+        assert data["user"]["email"] == email
 
     async def test_login_wrong_password(self, client, registered_user):
         resp = await client.post(
             "/api/auth/login",
             json={
-                "email": "newuser@example.com",
+                "email": registered_user["user"]["email"],
                 "password": "WrongPassword1",
             },
         )
@@ -91,10 +97,10 @@ class TestAuth:
         )
         assert resp.status_code == 401
 
-    async def test_get_me_authenticated(self, client, auth_headers):
+    async def test_get_me_authenticated(self, client, auth_headers, test_user):
         resp = await client.get("/api/auth/me", headers=auth_headers)
         assert resp.status_code == 200
-        assert resp.json()["email"] == "test@example.com"
+        assert resp.json()["email"] == test_user.email
 
     async def test_get_me_unauthenticated(self, client):
         resp = await client.get("/api/auth/me")
