@@ -63,11 +63,10 @@ class TestUserCRUD:
     async def test_update_user_login(self, db_session, test_user):
         old_login = test_user.last_login_at
         await update_user_login(db_session, test_user.id)
-        # Core-level update bypasses ORM cache, expire to force re-query
-        db_session.expire_all()
-        updated = await get_user_by_id(db_session, test_user.id)
-        assert updated.last_login_at is not None
-        assert updated.last_login_at != old_login
+        # Core-level update bypasses ORM cache — refresh the object
+        await db_session.refresh(test_user)
+        assert test_user.last_login_at is not None
+        assert test_user.last_login_at != old_login
 
 
 class TestSessionCRUD:
@@ -132,11 +131,9 @@ class TestAnalysisRecordCRUD:
             status="completed",
             report={"recommendation": "buy"},
         )
-        # 重新查询
-        records = await get_user_analysis_records(db_session, test_user.id)
-        updated = [r for r in records if r.id == record.id]
-        assert len(updated) == 1
-        assert updated[0].status == "completed"
+        # Core-level update bypasses ORM cache — refresh the object
+        await db_session.refresh(record)
+        assert record.status == "completed"
 
     @pytest.mark.asyncio
     async def test_get_user_analysis_records_pagination(self, db_session, test_user):
