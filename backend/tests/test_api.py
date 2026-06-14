@@ -28,8 +28,28 @@ class TestAPI:
         assert data["status"] == "success"
 
     async def test_orchestrate_endpoint(self, client):
-        response = await client.post(
-            "/api/orchestrate",
-            json={"symbols": ["00700"], "investment_amount": 100000, "risk_preference": "moderate", "market": "hk"},
-        )
-        assert response.status_code == 200
+        """Mock orchestrator to avoid LLM calls timing out in CI (no API key)."""
+        from unittest.mock import patch
+
+        mock_result = {
+            "market_analysis": {"content": "模拟市场分析结果", "confidence": 0.85},
+            "sentiment_analysis": {"content": "模拟情绪分析", "confidence": 0.80},
+            "risk_analysis": {"content": "模拟风险分析", "confidence": 0.90},
+            "portfolio_advice": {"content": "模拟投资建议", "confidence": 0.88},
+        }
+
+        async def fake_run(*args, **kwargs):
+            yield {"type": "agent_message", "data": {"agent": "MarketAnalyst", "content": "OK"}}
+            yield {"type": "complete", "data": mock_result}
+
+        with patch("main.orchestrator.run", side_effect=fake_run):
+            response = await client.post(
+                "/api/orchestrate",
+                json={
+                    "symbols": ["00700"],
+                    "investment_amount": 100000,
+                    "risk_preference": "moderate",
+                    "market": "hk",
+                },
+            )
+            assert response.status_code == 200
