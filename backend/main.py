@@ -53,9 +53,7 @@ async def lifespan(app: FastAPI):
 load_dotenv()
 
 ENV = os.getenv("ENV", "development")
-ALLOWED_ORIGINS = os.getenv(
-    "ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000"
-).split(",")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
 
 app = FastAPI(
     title="FinAgent Pro - AFAC2026",
