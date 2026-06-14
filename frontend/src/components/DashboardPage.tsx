@@ -8,22 +8,9 @@ import PortfolioPieChart from '../charts/PortfolioPieChart';
 import RiskGauge from '../charts/RiskGauge';
 import LiveAgentFeed, { AgentFeedMessage } from './LiveAgentFeed';
 import { HK_STOCKS } from '../constants';
+import type { StockData, AnalysisResult } from '../types';
 
 const { Option } = Select;
-
-interface StockData {
-  dates: string[]; prices: number[]; volumes: number[];
-  ma5?: number[]; ma20?: number[]; ma60?: number[];
-  indicators?: Record<string, number | null>;
-}
-
-interface AnalysisResult {
-  recommendation: string; confidence: number; risk_level: number;
-  expected_return: number; reasoning: string;
-  portfolio_allocation: Array<{symbol: string; name: string; weight: number; amount: number}>;
-  agent_messages: Array<Record<string, unknown>>;
-  cvar_95?: number; sharpe_ratio?: number; annual_return?: number; annual_volatility?: number;
-}
 
 export interface DashboardPageProps {
   marketOverview: {

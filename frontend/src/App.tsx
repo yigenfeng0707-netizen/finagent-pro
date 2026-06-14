@@ -14,6 +14,7 @@ import StockListPage from './components/StockListPage';
 import RiskGauge from './charts/RiskGauge';
 import { useWebSocket, WSMessage } from './hooks/useWebSocket';
 import { API_BASE } from './constants';
+import type { StockData, AgentMessage, AnalysisResult, WorkbenchStep, ToolCallEntry, HkSpotStock } from './types';
 import './App.css';
 
 const { Title } = AntTypography;
@@ -29,39 +30,6 @@ const MENU_TITLES: Record<string, string> = {
   risk: '风险评估',
   settings: '系统设置',
 };
-
-interface StockData {
-  dates: string[]; prices: number[]; volumes: number[];
-  ma5?: number[]; ma20?: number[]; ma60?: number[];
-  indicators?: Record<string, number | null>;
-}
-
-interface AgentMessage {
-  agent: string; role: string; content: string; timestamp: string;
-  status?: string; confidence?: number; thinking?: string; data?: Record<string, unknown>;
-}
-
-interface AnalysisResult {
-  recommendation: string; confidence: number; risk_level: number;
-  expected_return: number; reasoning: string;
-  portfolio_allocation: Array<{symbol: string; name: string; weight: number; amount: number}>;
-  agent_messages: AgentMessage[];
-  cvar_95?: number; sharpe_ratio?: number; annual_return?: number; annual_volatility?: number;
-}
-
-interface WorkbenchStep {
-  stepId: number; agent: string; role: string; description: string;
-  status: string; dependsOn: string[]; inputKeys: string[]; outputKey: string;
-}
-
-interface ToolCallEntry {
-  agent: string; tool: string; args: string; result: string; timestamp: string;
-}
-
-interface HkSpotStock {
-  price: number; change_pct: number; turnover: number;
-  [key: string]: unknown;
-}
 
 function genId() { return 'sess_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
