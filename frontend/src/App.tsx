@@ -102,10 +102,11 @@ const App: React.FC = () => {
     if (msg.type === 'agent_progress') {
       const p = msg.payload;
       // Type-safe extraction of payload fields
+      type StepStatus = 'pending' | 'running' | 'completed' | 'failed';
       const role = String(p.role || '');
       const agent = String(p.agent || '');
       const content = String(p.content || '');
-      const status = String(p.status || 'completed');
+      const status = (String(p.status || 'completed') as StepStatus);
       const timestamp = String(p.timestamp || '');
       const confidence = typeof p.confidence === 'number' ? p.confidence : undefined;
       const thinking = p.thinking ? String(p.thinking) : undefined;
