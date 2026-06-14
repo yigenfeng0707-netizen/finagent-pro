@@ -1,7 +1,7 @@
 """WebSocketManager 单元测试 — 连接管理、广播、心跳、连接数限制"""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from websocket_manager import MAX_CONNECTIONS_PER_SESSION, WebSocketManager

@@ -115,7 +115,7 @@ class TestRedisCache:
     @pytest.mark.asyncio
     async def test_redis_cache_get_set_with_mock(self):
         """Redis 可用时正常读写"""
-        from unittest.mock import AsyncMock, patch
+        from unittest.mock import AsyncMock
 
         from services.market_data import RedisCache
 
@@ -183,7 +183,6 @@ class TestTechnicalIndicators:
 
         svc = MarketDataService()
         # 生成足够长的数据以计算 MA60
-        dates = pd.date_range("2026-01-01", periods=100)
         df = pd.DataFrame({"收盘": np.random.uniform(100, 200, 100)})
 
         result = svc.calculate_technical_indicators(df)

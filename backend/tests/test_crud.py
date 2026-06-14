@@ -1,7 +1,6 @@
 """数据库 CRUD 操作测试 — 覆盖未测试的 User/Session/Analysis/ApiUsage/AuditLog 方法"""
 
 import uuid
-from datetime import datetime, timedelta
 
 import pytest
 from auth.password import hash_password
@@ -21,7 +20,6 @@ from database.crud import (
     update_analysis_record,
     update_user_login,
 )
-from database.models import AnalysisRecord, Session, User
 
 
 class TestUserCRUD:

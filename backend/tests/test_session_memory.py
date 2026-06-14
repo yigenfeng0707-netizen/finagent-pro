@@ -1,9 +1,5 @@
 """SessionMemory 单元测试 — 会话持久化、历史、偏好、路径穿越防护"""
 
-import json
-import os
-import tempfile
-
 import pytest
 from memory.session_memory import SessionMemory
 
