@@ -63,7 +63,8 @@ class TestUserCRUD:
     async def test_update_user_login(self, db_session, test_user):
         old_login = test_user.last_login_at
         await update_user_login(db_session, test_user.id)
-        # 重新查询验证
+        # Core-level update bypasses ORM cache, expire to force re-query
+        db_session.expire_all()
         updated = await get_user_by_id(db_session, test_user.id)
         assert updated.last_login_at is not None
         assert updated.last_login_at != old_login
@@ -129,7 +130,7 @@ class TestAnalysisRecordCRUD:
             db_session,
             record.id,
             status="completed",
-            result={"recommendation": "buy"},
+            report={"recommendation": "buy"},
         )
         # 重新查询
         records = await get_user_analysis_records(db_session, test_user.id)
