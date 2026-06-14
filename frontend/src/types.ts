@@ -23,7 +23,8 @@ export interface AnalysisResult {
 
 export interface WorkbenchStep {
   stepId: number; agent: string; role: string; description: string;
-  status: string; dependsOn: string[]; inputKeys: string[]; outputKey: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  dependsOn: number[]; inputKeys: string[]; outputKey: string;
 }
 
 export interface ToolCallEntry {
