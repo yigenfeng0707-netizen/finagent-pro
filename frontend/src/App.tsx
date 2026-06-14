@@ -214,7 +214,7 @@ const App: React.FC = () => {
         }
       }
     } else if (msg.type === 'final_report') {
-      const report = msg.payload;
+      const report = msg.payload as AnalysisResult;
       setAnalysisResult(report);
       setAnalysisProgress({step: 5, total: 4, agentName: ''});
       setAnalysisMetrics({
