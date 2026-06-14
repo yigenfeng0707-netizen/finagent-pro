@@ -20,8 +20,9 @@ TEST_DATABASE_URL = os.getenv(
 )
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def test_engine():
+    """Function-scoped engine to ensure each test gets its own event loop + DB connections."""
     engine = create_async_engine(TEST_DATABASE_URL, echo=False, pool_size=5, pool_pre_ping=True)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
