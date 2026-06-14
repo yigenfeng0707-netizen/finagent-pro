@@ -101,6 +101,16 @@ const App: React.FC = () => {
   const handleWSMessage = useCallback((msg: WSMessage) => {
     if (msg.type === 'agent_progress') {
       const p = msg.payload;
+      // Type-safe extraction of payload fields
+      const role = String(p.role || '');
+      const agent = String(p.agent || '');
+      const content = String(p.content || '');
+      const status = String(p.status || 'completed');
+      const timestamp = String(p.timestamp || '');
+      const confidence = typeof p.confidence === 'number' ? p.confidence : undefined;
+      const thinking = p.thinking ? String(p.thinking) : undefined;
+      const data = p.data as Record<string, unknown> | undefined;
+
       // Update progress tracking based on agent role
       const roleProgressMap: Record<string, {step: number, total: number, agentName: string}> = {
         MARKET_ANALYST: { step: 1, total: 4, agentName: '市场分析师' },
@@ -108,60 +118,58 @@ const App: React.FC = () => {
         RISK_MANAGER: { step: 3, total: 4, agentName: '风险经理' },
         PORTFOLIO_ADVISOR: { step: 4, total: 4, agentName: '组合顾问' },
       };
-      if (p.role && roleProgressMap[p.role]) {
-        setAnalysisProgress(roleProgressMap[p.role]);
+      if (role && roleProgressMap[role]) {
+        setAnalysisProgress(roleProgressMap[role]);
       }
 
       const feed: AgentFeedMessage = {
-        agent: p.agent || '', role: p.role || '', content: p.content || '',
-        status: p.status || 'completed', timestamp: p.timestamp || '',
-        confidence: p.confidence, thinking: p.thinking,
+        agent, role, content,
+        status, timestamp,
+        confidence, thinking,
       };
       setFeedMessages(prev => [...prev, feed]);
 
       setThinkingSteps(prev => {
-        const role = p.role || '';
         const existingIdx = prev.findIndex(s => s.role === role && s.status === 'running');
         if (existingIdx >= 0) {
           const updated = [...prev];
           updated[existingIdx] = {
             ...updated[existingIdx],
-            status: p.status || 'completed',
-            content: p.content || '',
-            thinking: p.thinking || undefined,
-            confidence: p.confidence,
-            data: p.data,
+            status,
+            content,
+            thinking: thinking || undefined,
+            confidence,
+            data,
           };
           return updated;
         }
-        if (p.status === 'running' || !prev.find(s => s.role === role)) {
+        if (status === 'running' || !prev.find(s => s.role === role)) {
           stepCounter.current += 1;
           return [...prev, {
             stepId: stepCounter.current,
-            agent: p.agent || '',
+            agent,
             role,
-            content: p.content || '',
-            thinking: p.thinking,
-            status: p.status || 'completed',
-            timestamp: p.timestamp || '',
-            confidence: p.confidence,
-            data: p.data,
+            content,
+            thinking,
+            status,
+            timestamp,
+            confidence,
+            data,
           }];
         }
         return prev;
       });
 
-      if (p.thinking) {
+      if (thinking) {
         setWorkbenchSteps(prev => {
-          const role = p.role || '';
           const exists = prev.find((s) => s.role === role);
-          if (exists) return prev.map((s) => s.role === role ? { ...s, status: p.status || 'completed' } : s);
+          if (exists) return prev.map((s) => s.role === role ? { ...s, status } : s);
           return [...prev, {
             stepId: stepCounter.current,
-            agent: p.agent || '',
+            agent,
             role,
-            description: `${p.agent || ''} 正在执行...`,
-            status: p.status || 'running',
+            description: `${agent} 正在执行...`,
+            status: status === 'running' ? 'running' : status,
             dependsOn: [],
             inputKeys: [],
             outputKey: role + '_analysis',
@@ -169,34 +177,35 @@ const App: React.FC = () => {
         });
       }
 
-      if (p.data) {
-        setLiveContext(prev => ({ ...prev, [p.role + '_analysis']: JSON.stringify(p.data).slice(0, 200) }));
+      if (data) {
+        setLiveContext(prev => ({ ...prev, [role + '_analysis']: JSON.stringify(data).slice(0, 200) }));
       }
 
       // Extract tool calls from agent data — use ref to avoid stale closure
-      if (p.data && p.role !== 'orchestrator') {
+      if (data && role !== 'orchestrator') {
         const currentSymbol = selectedStockRef.current;
         const toolEntries: ToolCallEntry[] = [];
-        if (p.data.current_price !== undefined) {
+        if (data.current_price !== undefined) {
           toolEntries.push({
-            agent: p.agent, tool: 'get_stock_price',
-            args: `symbol=${currentSymbol}`, result: `价格: ${p.data.current_price} HKD`,
-            timestamp: p.timestamp || new Date().toLocaleTimeString(),
+            agent, tool: 'get_stock_price',
+            args: `symbol=${currentSymbol}`, result: `价格: ${data.current_price} HKD`,
+            timestamp: timestamp || new Date().toLocaleTimeString(),
           });
         }
-        if (p.data.rsi !== undefined) {
+        if (data.rsi !== undefined) {
           toolEntries.push({
-            agent: p.agent, tool: 'get_technical_indicators',
-            args: `symbol=${currentSymbol}`, result: `RSI: ${p.data.rsi}, MA5: ${p.data.ma5 || 'N/A'}`,
-            timestamp: p.timestamp || new Date().toLocaleTimeString(),
+            agent, tool: 'get_technical_indicators',
+            args: `symbol=${currentSymbol}`, result: `RSI: ${data.rsi}, MA5: ${(data.ma5 as number) || 'N/A'}`,
+            timestamp: timestamp || new Date().toLocaleTimeString(),
           });
         }
-        if (p.data.risk_data) {
+        if (data.risk_data) {
+          const riskData = data.risk_data as Record<string, unknown>;
           toolEntries.push({
-            agent: p.agent, tool: 'get_portfolio_risk',
+            agent, tool: 'get_portfolio_risk',
             args: `symbols=${currentSymbol}`, 
-            result: `波动率: ${p.data.risk_data?.portfolio_volatility || 'N/A'}%`,
-            timestamp: p.timestamp || new Date().toLocaleTimeString(),
+            result: `波动率: ${riskData?.portfolio_volatility || 'N/A'}%`,
+            timestamp: timestamp || new Date().toLocaleTimeString(),
           });
         }
         if (toolEntries.length > 0) {
