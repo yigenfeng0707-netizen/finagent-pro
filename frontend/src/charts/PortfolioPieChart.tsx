@@ -42,9 +42,7 @@ const PortfolioPieChart: React.FC<PortfolioPieChartProps> = ({
       },
       tooltip: {
         trigger: 'item',
-        formatter: (params: { name: string; percent: number; data: { amount: number } }) => {
-          return `${params.name}<br/>占比: ${params.percent}%<br/>金额: ${params.data.amount}万港币`;
-        }
+        formatter: '{b}<br/>占比: {d}%<br/>金额: {c}万港币',
       },
       legend: {
         orient: 'vertical',
