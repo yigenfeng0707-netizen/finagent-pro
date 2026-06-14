@@ -1,3 +1,4 @@
+import os
 import traceback
 
 from fastapi import Request
@@ -39,9 +40,14 @@ async def global_exception_handler(request: Request, exc: Exception):
         )
 
     logger.error(f"未捕获异常: {traceback.format_exc()}")
+
+    # 生产环境不暴露内部错误细节，仅返回通用错误信息
+    is_production = os.getenv("ENV", "development") == "production"
+    detail = {} if is_production else ({"message": str(exc)} if str(exc) else {})
+
     return JSONResponse(
         status_code=500,
-        content={"status": "error", "error": "内部服务器错误", "detail": {"message": str(exc)} if str(exc) else {}},
+        content={"status": "error", "error": "内部服务器错误", "detail": detail},
     )
 
 

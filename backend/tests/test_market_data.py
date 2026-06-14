@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
+import pytest
 
 
 class TestMarketTools:
@@ -106,3 +107,155 @@ class TestMiddleware:
         for _ in range(5):
             limiter.check("test_key2", 5, 60)
         assert limiter.check("test_key2", 5, 60) is False
+
+
+class TestRedisCache:
+    """RedisCache 异步缓存层"""
+
+    @pytest.mark.asyncio
+    async def test_redis_cache_get_set_with_mock(self):
+        """Redis 可用时正常读写"""
+        from unittest.mock import AsyncMock, patch
+
+        from services.market_data import RedisCache
+
+        cache = RedisCache()
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value='{"price": 350}')
+        cache._redis = mock_redis
+
+        result = await cache.get("stock:00700")
+        assert result == '{"price": 350}'
+
+    @pytest.mark.asyncio
+    async def test_redis_cache_fallback_when_unavailable(self):
+        """Redis 不可用时 get 返回 None"""
+        from services.market_data import RedisCache
+
+        cache = RedisCache()
+        cache._redis = False  # 模拟不可用状态
+        result = await cache.get("any_key")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_redis_cache_set_silent_on_error(self):
+        """Redis set 失败时不抛异常"""
+        from unittest.mock import AsyncMock
+
+        from services.market_data import RedisCache
+
+        cache = RedisCache()
+        mock_redis = AsyncMock()
+        mock_redis.setex = AsyncMock(side_effect=Exception("connection lost"))
+        cache._redis = mock_redis
+        # 不应抛异常
+        await cache.set("key", "value", ttl=60)
+
+
+class TestMarketDataServiceFileCache:
+    """MarketDataService 文件缓存"""
+
+    def test_save_and_load_cache(self, tmp_path):
+        from services.market_data import MarketDataService
+
+        svc = MarketDataService()
+        svc.cache_dir = str(tmp_path)
+        data = {"price": 350, "name": "腾讯"}
+        svc._save_cache("00700", "hk", data)
+
+        loaded = svc._load_cache("00700", "hk")
+        assert loaded is not None
+        assert loaded["price"] == 350
+
+    def test_load_cache_miss_returns_none(self, tmp_path):
+        from services.market_data import MarketDataService
+
+        svc = MarketDataService()
+        svc.cache_dir = str(tmp_path)
+        assert svc._load_cache("99999", "hk") is None
+
+
+class TestTechnicalIndicators:
+    """技术指标计算"""
+
+    def test_calculate_indicators_basic(self):
+        from services.market_data import MarketDataService
+
+        svc = MarketDataService()
+        # 生成足够长的数据以计算 MA60
+        dates = pd.date_range("2026-01-01", periods=100)
+        df = pd.DataFrame({"收盘": np.random.uniform(100, 200, 100)})
+
+        result = svc.calculate_technical_indicators(df)
+        assert "ma5" in result
+        assert "ma20" in result
+        assert "ma60" in result
+        assert "rsi" in result
+        assert "macd_dif" in result
+        assert "bb_upper" in result
+
+    def test_calculate_indicators_empty_df(self):
+        from services.market_data import MarketDataService
+
+        svc = MarketDataService()
+        result = svc.calculate_technical_indicators(pd.DataFrame())
+        assert result == {}
+
+
+class TestStockNameMapping:
+    """股票名称映射"""
+
+    def test_hk_known_stock(self):
+        from services.market_data import MarketDataService
+
+        svc = MarketDataService()
+        assert svc._get_stock_name("00700", "hk") == "腾讯控股"
+        assert svc._get_stock_name("09988", "hk") == "阿里巴巴"
+
+    def test_hk_unknown_stock(self):
+        from services.market_data import MarketDataService
+
+        svc = MarketDataService()
+        name = svc._get_stock_name("99999", "hk")
+        assert "港股" in name
+
+    def test_us_stock_prefix(self):
+        from services.market_data import MarketDataService
+
+        svc = MarketDataService()
+        assert "美股" in svc._get_stock_name("AAPL", "us")
+
+    def test_cn_stock_prefix(self):
+        from services.market_data import MarketDataService
+
+        svc = MarketDataService()
+        assert "A股" in svc._get_stock_name("600519", "cn")
+
+
+class TestGetStockHistory:
+    """股票历史数据获取（mock akshare）"""
+
+    def test_get_stock_history_hk(self):
+        from unittest.mock import patch
+
+        from services.market_data import MarketDataService
+
+        svc = MarketDataService()
+        mock_df = pd.DataFrame({"日期": ["2026-06-01"], "收盘": [350.0], "成交量": [1000000]})
+
+        with patch("services.market_data.ak") as mock_ak:
+            mock_ak.stock_hk_hist.return_value = mock_df
+            result = svc.get_stock_history("00700", "hk", days=30)
+            assert not result.empty
+            mock_ak.stock_hk_hist.assert_called_once()
+
+    def test_get_stock_history_failure_returns_empty(self):
+        from unittest.mock import patch
+
+        from services.market_data import MarketDataService
+
+        svc = MarketDataService()
+        with patch("services.market_data.ak") as mock_ak:
+            mock_ak.stock_hk_hist.side_effect = Exception("API error")
+            result = svc.get_stock_history("00700", "hk")
+            assert result.empty

@@ -74,6 +74,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
       - name: Install dependencies
         run: |
           pip install -r backend/requirements.txt
@@ -94,7 +99,7 @@ jobs:
       - name: Upload coverage
         uses: codecov/codecov-action@v5
         with:
-          file: backend/coverage.xml
+          files: backend/coverage.xml
           fail_ci_if_error: false
 
   build:

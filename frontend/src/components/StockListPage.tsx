@@ -34,15 +34,15 @@ const StockListPage: React.FC<StockListPageProps> = ({ selectedStock, setSelecte
           // Match with our HK_STOCKS list
           const codes = new Set(HK_STOCKS.map(s => s.code));
           const matched = json.data
-            .filter((s: any) => codes.has(s['代码'] || s['编号']))
-            .map((s: any) => ({
-              代码: s['代码'] || s['编号'],
-              名称: s['名称'],
-              最新价: parseFloat(s['最新价']) || 0,
-              涨跌幅: parseFloat(s['涨跌幅']) || 0,
-              涨跌额: parseFloat(s['涨跌额']) || 0,
-              成交量: parseFloat(s['成交量']) || 0,
-              成交额: parseFloat(s['成交额']) || 0,
+            .filter((s: Record<string, unknown>) => codes.has((s['代码'] || s['编号']) as string))
+            .map((s: Record<string, unknown>) => ({
+              代码: (s['代码'] || s['编号']) as string,
+              名称: s['名称'] as string,
+              最新价: parseFloat(String(s['最新价'])) || 0,
+              涨跌幅: parseFloat(String(s['涨跌幅'])) || 0,
+              涨跌额: parseFloat(String(s['涨跌额'])) || 0,
+              成交量: parseFloat(String(s['成交量'])) || 0,
+              成交额: parseFloat(String(s['成交额'])) || 0,
             }));
           setStocks(matched);
         }
@@ -69,11 +69,23 @@ const StockListPage: React.FC<StockListPageProps> = ({ selectedStock, setSelecte
               <Card
                 hoverable
                 size="small"
+                tabIndex={0}
+                role="button"
+                aria-label={`选择 ${isSpot ? (stock as StockSpot).名称 : (stock as typeof HK_STOCKS[number]).name}`}
                 onClick={() => {
                   const code = isSpot
                     ? (stock as StockSpot).代码
                     : (stock as typeof HK_STOCKS[number]).code;
                   setSelectedStock(code);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    const code = isSpot
+                      ? (stock as StockSpot).代码
+                      : (stock as typeof HK_STOCKS[number]).code;
+                    setSelectedStock(code);
+                  }
                 }}
                 style={{
                   borderLeft: `3px solid ${isUp ? '#cf1322' : change < 0 ? '#3f8600' : '#d9d9d9'}`,

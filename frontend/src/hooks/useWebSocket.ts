@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 
 export interface WSMessage {
   type: 'agent_progress' | 'status' | 'final_report';
-  payload: any;
+  payload: Record<string, unknown>;
 }
 
 export interface WSOptions {

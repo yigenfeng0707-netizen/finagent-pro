@@ -33,11 +33,12 @@ const MENU_TITLES: Record<string, string> = {
 interface StockData {
   dates: string[]; prices: number[]; volumes: number[];
   ma5?: number[]; ma20?: number[]; ma60?: number[];
+  indicators?: Record<string, number | null>;
 }
 
 interface AgentMessage {
   agent: string; role: string; content: string; timestamp: string;
-  status?: string; confidence?: number; thinking?: string; data?: any;
+  status?: string; confidence?: number; thinking?: string; data?: Record<string, unknown>;
 }
 
 interface AnalysisResult {
@@ -46,6 +47,20 @@ interface AnalysisResult {
   portfolio_allocation: Array<{symbol: string; name: string; weight: number; amount: number}>;
   agent_messages: AgentMessage[];
   cvar_95?: number; sharpe_ratio?: number; annual_return?: number; annual_volatility?: number;
+}
+
+interface WorkbenchStep {
+  stepId: number; agent: string; role: string; description: string;
+  status: string; dependsOn: string[]; inputKeys: string[]; outputKey: string;
+}
+
+interface ToolCallEntry {
+  agent: string; tool: string; args: string; result: string; timestamp: string;
+}
+
+interface HkSpotStock {
+  price: number; change_pct: number; turnover: number;
+  [key: string]: unknown;
 }
 
 function genId() { return 'sess_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -66,8 +81,8 @@ const App: React.FC = () => {
   const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
   const [wsConnected, setWsConnected] = useState(false);
 
-  const [workbenchSteps, setWorkbenchSteps] = useState<any[]>([]);
-  const [toolCalls, setToolCalls] = useState<any[]>([]);
+  const [workbenchSteps, setWorkbenchSteps] = useState<WorkbenchStep[]>([]);
+  const [toolCalls, setToolCalls] = useState<ToolCallEntry[]>([]);
   const [liveContext, setLiveContext] = useState<Record<string, string>>({});
   const [analysisMetrics, setAnalysisMetrics] = useState<{duration: number, toolCalls: number, agents: number} | null>(null);
   const [analysisProgress, setAnalysisProgress] = useState<{step: number, total: number, agentName: string}>({step: 0, total: 4, agentName: ''});
@@ -75,7 +90,7 @@ const App: React.FC = () => {
 
   const stepCounter = useRef(0);
   const selectedStockRef = useRef(selectedStock);
-  const toolCallsRef = useRef<any[]>([]);
+  const toolCallsRef = useRef<ToolCallEntry[]>([]);
   const wsConnectedRef = useRef(false);
 
   // Keep refs in sync with state
@@ -139,8 +154,8 @@ const App: React.FC = () => {
       if (p.thinking) {
         setWorkbenchSteps(prev => {
           const role = p.role || '';
-          const exists = prev.find((s: any) => s.role === role);
-          if (exists) return prev.map((s: any) => s.role === role ? { ...s, status: p.status || 'completed' } : s);
+          const exists = prev.find((s) => s.role === role);
+          if (exists) return prev.map((s) => s.role === role ? { ...s, status: p.status || 'completed' } : s);
           return [...prev, {
             stepId: stepCounter.current,
             agent: p.agent || '',
@@ -161,7 +176,7 @@ const App: React.FC = () => {
       // Extract tool calls from agent data — use ref to avoid stale closure
       if (p.data && p.role !== 'orchestrator') {
         const currentSymbol = selectedStockRef.current;
-        const toolEntries: any[] = [];
+        const toolEntries: ToolCallEntry[] = [];
         if (p.data.current_price !== undefined) {
           toolEntries.push({
             agent: p.agent, tool: 'get_stock_price',
@@ -320,7 +335,7 @@ const App: React.FC = () => {
     const r = analysisResult;
     const w = window.open('', '_blank');
     if (!w) { message.error('无法打开导出窗口，请允许弹窗'); return; }
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>FinAgent Pro 投资分析报告</title>
+    w.document.write(`<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>FinAgent Pro 投资分析报告</title>
       <style>
         body { font-family: -apple-system, 'Segoe UI', sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; color: #333; }
         h1 { color: #1890ff; border-bottom: 2px solid #1890ff; padding-bottom: 8px; }
@@ -371,9 +386,9 @@ const App: React.FC = () => {
       if (data.success && data.data && data.data.length > 0) {
         // 基于采样股票计算市场趋势指标（非恒指实际点位，为采样加权估算）
         const stocks = data.data;
-        const avgChange = stocks.reduce((sum: number, s: any) => sum + (s.change_pct || 0), 0) / stocks.length;
-        const totalVolume = stocks.reduce((sum: number, s: any) => sum + (s.turnover || 0), 0);
-        const avgPrice = stocks.reduce((sum: number, s: any) => sum + (s.price || 0), 0) / stocks.length;
+        const avgChange = stocks.reduce((sum: number, s: HkSpotStock) => sum + (s.change_pct || 0), 0) / stocks.length;
+        const totalVolume = stocks.reduce((sum: number, s: HkSpotStock) => sum + (s.turnover || 0), 0);
+        const avgPrice = stocks.reduce((sum: number, s: HkSpotStock) => sum + (s.price || 0), 0) / stocks.length;
         setMarketOverview({
           hsIndex: Math.round(avgPrice * 100) / 100,  // 采样均价作为趋势参考
           hsChange: Math.round(avgChange * 100) / 100,
@@ -402,7 +417,7 @@ const App: React.FC = () => {
       token: { colorPrimary: '#1890ff', borderRadius: 6 },
     }}>
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider trigger={null} collapsible collapsed={collapsed} onCollapse={(c: boolean) => setCollapsed(c)}>
+      <Sider trigger={null} collapsible collapsed={collapsed} onCollapse={(c: boolean) => setCollapsed(c)} aria-label="主导航">
         <div className="logo">
           <RobotOutlined style={{ fontSize: 24, color: 'white' }} />
           {!collapsed && <span style={{ color: 'white', marginLeft: 8, fontSize: 18 }}>FinAgent Pro</span>}
@@ -433,6 +448,7 @@ const App: React.FC = () => {
               checkedChildren={<MoonOutlined />}
               unCheckedChildren={<SunOutlined />}
               title="暗色模式"
+              aria-label="切换暗色模式"
             />
           </div>
         </Header>
@@ -457,7 +473,7 @@ const App: React.FC = () => {
                 analysisMetrics={analysisMetrics}
               />
               {loading && (
-                <div style={{
+                <div role="alert" aria-live="assertive" aria-busy="true" style={{
                   position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                   background: 'rgba(0,0,0,0.45)', zIndex: 1000,
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -522,7 +538,7 @@ const App: React.FC = () => {
                   items={[
                     { key: '1', label: '配置详情',
                       children: <List dataSource={analysisResult.portfolio_allocation}
-                        renderItem={(item: any) => (
+                        renderItem={(item) => (
                           <List.Item>
                             <List.Item.Meta title={`${item.name} (${item.symbol})`}
                               description={`配置金额: HKD ${item.amount.toLocaleString()}`} />

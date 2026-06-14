@@ -11,6 +11,20 @@ import { HK_STOCKS } from '../constants';
 
 const { Option } = Select;
 
+interface StockData {
+  dates: string[]; prices: number[]; volumes: number[];
+  ma5?: number[]; ma20?: number[]; ma60?: number[];
+  indicators?: Record<string, number | null>;
+}
+
+interface AnalysisResult {
+  recommendation: string; confidence: number; risk_level: number;
+  expected_return: number; reasoning: string;
+  portfolio_allocation: Array<{symbol: string; name: string; weight: number; amount: number}>;
+  agent_messages: Array<Record<string, unknown>>;
+  cvar_95?: number; sharpe_ratio?: number; annual_return?: number; annual_volatility?: number;
+}
+
 export interface DashboardPageProps {
   marketOverview: {
     hsIndex: number;
@@ -19,7 +33,7 @@ export interface DashboardPageProps {
     techChange: number;
     volume: number;
   };
-  stockData: any;
+  stockData: StockData | null;
   selectedStock: string;
   setSelectedStock: (s: string) => void;
   investmentAmount: number;
@@ -28,8 +42,8 @@ export interface DashboardPageProps {
   setRiskPreference: (s: string) => void;
   runAnalysis: () => void;
   loading: boolean;
-  feedMessages: any[];
-  analysisResult: any;
+  feedMessages: AgentFeedMessage[];
+  analysisResult: AnalysisResult | null;
   wsConnected: boolean;
   runDemo: () => void;
   analysisMetrics: {duration: number, toolCalls: number, agents: number} | null;
@@ -93,12 +107,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({
       <Col span={8}>
         <Card title="快速分析">
           <div style={{ marginBottom: 16 }}>
-            <label>投资金额 (HKD):</label>
-            <Input type="number" value={investmentAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInvestmentAmount(Number(e.target.value))} prefix="$" style={{ marginTop: 8 }} />
+            <label htmlFor="investment-amount">投资金额 (HKD):</label>
+            <Input id="investment-amount" type="number" value={investmentAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInvestmentAmount(Number(e.target.value))} prefix="$" style={{ marginTop: 8 }} />
           </div>
           <div style={{ marginBottom: 16 }}>
-            <label>风险偏好:</label>
-            <Select value={riskPreference} onChange={setRiskPreference} style={{ width: '100%', marginTop: 8 }}>
+            <label htmlFor="risk-preference">风险偏好:</label>
+            <Select id="risk-preference" value={riskPreference} onChange={setRiskPreference} style={{ width: '100%', marginTop: 8 }}>
               <Option value="conservative">保守型</Option>
               <Option value="moderate">稳健型</Option>
               <Option value="aggressive">进取型</Option>

@@ -54,7 +54,7 @@ load_dotenv()
 
 ENV = os.getenv("ENV", "development")
 ALLOWED_ORIGINS = os.getenv(
-    "ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000,https://finagent.example.com"
+    "ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000"
 ).split(",")
 
 app = FastAPI(

@@ -21,3 +21,12 @@ scripts/
 frontend/build
 *.log
 *.err
+screenshots/
+docs/
+.ruff_cache/
+ci_log*.txt
+nul
+部署指南.md
+演示脚本.md
+CHANGELOG.md
+README.md

@@ -15,7 +15,7 @@ export interface ThinkingStep {
   status: 'pending' | 'running' | 'completed' | 'failed';
   timestamp: string;
   confidence?: number;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
 }
 
 interface AgentThinkingPanelProps {

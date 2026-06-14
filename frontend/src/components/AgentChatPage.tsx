@@ -1,11 +1,11 @@
 import React from 'react';
 import { Row, Col, Card } from 'antd';
-import LiveAgentFeed from './LiveAgentFeed';
-import AgentThinkingPanel from './AgentThinkingPanel';
+import LiveAgentFeed, { AgentFeedMessage } from './LiveAgentFeed';
+import AgentThinkingPanel, { ThinkingStep } from './AgentThinkingPanel';
 
 export interface AgentChatPageProps {
-  feedMessages: any[];
-  thinkingSteps: any[];
+  feedMessages: AgentFeedMessage[];
+  thinkingSteps: ThinkingStep[];
 }
 
 const AgentChatPage: React.FC<AgentChatPageProps> = ({ feedMessages, thinkingSteps }) => (
