@@ -1,5 +1,37 @@
 # Changelog
 
+## [2.2.0] - 2026-06-15
+
+### 冠军品质升级 — 学术级精度 + LLM综合推理 + 竞品对比
+
+**核心算法升级**
+- 马科维茨优化：1000次随机采样 → **scipy SLSQP精确求解**，输出最大夏普比率+最小波动率组合，2000次Dirichlet采样有效前沿（可视化用）
+- 压力测试：经验公式 → **协方差矩阵+相关性聚集(Longin & Solnik, 2001)+分散化比率(Choueifaty & Coignard, 2008)**，学术引用Basel(2009)+Kupiec(2000)
+- 综合报告：关键词匹配 → **多因子评分模型(风险30%+动量25%+情绪25%+夏普20%) + LLM增强综合推理**，3个API端点统一使用`synthesize_report_with_llm`
+
+**SSE流式端点修复**
+- `/api/chat/stream` 末尾补全综合报告生成逻辑：收集agent_messages → synthesize_report → 发送final_report事件
+
+**ESG Agent骨架（Phase 2）**
+- 新增 `esg_analyst.py`：5只港股占位ESG数据 + LLM分析
+- 新增 `/api/esg/analyze` API端点
+- 规划数据源：商道融绿/MSCI/Sustainalytics
+
+**前端工程化**
+- 移除 `react-scripts` 依赖，升级 TypeScript 5.5
+- 新增 ESLint 配置（.eslintrc.cjs）+ lint/typecheck 脚本
+- package.json 版本号 1.0.0 → 2.1.0
+
+**市场价值增强**
+- 新增竞品深度对比表：FinAgent Pro vs 雪球/富途牛牛/同花顺（8维度）
+- 落地案例添加MVP模拟数据标注
+- 绿色金融量化：Patterson et al. (2022) 碳排放换算
+
+**文档同步**
+- README.md 更新：竞品对比+学术级描述+ESG端点+视频录制指引
+- 项目创意方案.md 同步更新：竞品对比+学术级描述+落地案例标注
+- 新增 录屏脚本.md：3分钟演示视频录制流程
+
 ## [2.1.0] - 2026-06-15
 
 ### 重大升级 — DAG并行编排 + 全面评审对齐

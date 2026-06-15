@@ -204,7 +204,7 @@ async def orchestrate(request: OrchestratorRequest, auth=Depends(optional_auth))
             orchestrator.remove_progress(session_id)
 
         context = _build_sync_context(agent_messages, request)
-        report = orchestrator.synthesize_report(context)
+        report = await orchestrator.synthesize_report_with_llm(context)
 
         await ws_manager.broadcast_final(session_id, report.model_dump())
 
@@ -273,7 +273,7 @@ async def chat(request: ChatRequest, auth=Depends(optional_auth)):
 
         req_obj = SimpleNamespace(symbols=symbols, risk_preference=risk_pref, investment_amount=investment_amount, market="hk")
         ctx = _build_sync_context(agent_messages, req_obj)
-        report = orchestrator.synthesize_report(ctx)
+        report = await orchestrator.synthesize_report_with_llm(ctx)
         await ws_manager.broadcast_final(session_id, report.model_dump())
 
         return {"type": "analysis_complete", "session_id": session_id, "data": report.model_dump()}
@@ -304,7 +304,9 @@ async def chat_stream(request: ChatRequest, auth=Depends(optional_auth)):
         # 发送意图识别结果
         yield f"data: {json.dumps({'type': 'intent', 'data': intent}, ensure_ascii=False)}\n\n"
 
-        # 流式执行 Agent 编排
+        # 收集所有Agent消息用于生成综合报告
+        agent_messages = []
+
         async def on_message(msg):
             pass  # SSE 不需要额外广播
 
@@ -313,6 +315,7 @@ async def chat_stream(request: ChatRequest, auth=Depends(optional_auth)):
             async for agent_msg in orchestrator.run(
                 symbols=symbols, investment_amount=investment_amount, risk_preference=risk_pref, market="hk", session_id=session_id
             ):
+                agent_messages.append(agent_msg)
                 msg_data = {
                     "type": "agent_progress",
                     "agent": agent_msg.agent,
@@ -325,10 +328,23 @@ async def chat_stream(request: ChatRequest, auth=Depends(optional_auth)):
         finally:
             orchestrator.remove_progress(session_id)
 
-        # 生成最终报告
+        # 生成最终综合报告
         from types import SimpleNamespace
         req_obj = SimpleNamespace(symbols=symbols, risk_preference=risk_pref, investment_amount=investment_amount, market="hk")
-        # 收集 agent_messages 需要在 run 中保存
+        ctx = _build_sync_context(agent_messages, req_obj)
+        report = await orchestrator.synthesize_report_with_llm(ctx)
+
+        report_data = {
+            "type": "final_report",
+            "session_id": session_id,
+            "recommendation": report.recommendation,
+            "confidence": report.confidence,
+            "risk_level": report.risk_level,
+            "expected_return": report.expected_return,
+            "reasoning": report.reasoning,
+            "portfolio_allocation": report.portfolio_allocation,
+        }
+        yield f"data: {json.dumps(report_data, ensure_ascii=False)}\n\n"
         yield f"data: {json.dumps({'type': 'done', 'session_id': session_id}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -472,6 +488,18 @@ async def knowledge_delete(doc_ids: list, auth=Depends(optional_auth)):
         return {"status": "success" if success else "failed"}
     except Exception as e:
         raise DataFetchError("knowledge_delete", str(e))
+
+
+@app.post("/api/esg/analyze")
+async def esg_analyze(symbol: str, market: str = "hk", auth=Depends(optional_auth)):
+    """ESG分析（Phase 2 — 当前为骨架实现）"""
+    try:
+        from agents.esg_analyst import ESGAnalyst
+        esg_agent = ESGAnalyst()
+        result = await esg_agent.analyze(symbol=symbol, market=market)
+        return {"success": True, "data": result.data, "analysis": result.content}
+    except Exception as e:
+        raise AgentExecutionError("esg_analyst", str(e))
 
 
 # ========== 启动 ==========

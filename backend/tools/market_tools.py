@@ -244,7 +244,15 @@ class MarketTools:
 
     @staticmethod
     def stress_test(symbols: List[Dict[str, Any]], scenarios: List[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """压力测试 — 模拟极端市场情景下的组合损失"""
+        """压力测试 — 基于历史相关性的情景分析
+
+        基于协方差矩阵计算组合在极端情景下的损失，考虑资产间相关性对分散化效应的影响。
+
+        References:
+            Basel Committee on Banking Supervision (2009). Principles for Sound Stress Testing Practices
+            and Supervision. Bank for International Settlements.
+            Kupiec, P. (2000). Stress Testing in a Value at Risk Framework. Journal of Derivatives, 6(1), 7-24.
+        """
         try:
             if scenarios is None:
                 scenarios = [
@@ -276,37 +284,78 @@ class MarketTools:
             weights = np.array([item.get("weight", 1.0 / len(symbols)) for item in symbols if item["symbol"] in stock_returns])
             weights = weights / weights.sum()
 
+            # 计算协方差矩阵和相关性矩阵
+            returns_df = pd.DataFrame(stock_returns)
+            cov_matrix = returns_df.cov() * 252  # 年化协方差
+            corr_matrix = returns_df.corr()  # 相关系数矩阵
+
+            # 组合年化波动率
+            portfolio_vol = float(np.sqrt(weights @ cov_matrix.values @ weights))
+
+            # 计算分散化比率 (Diversification Ratio)
+            # DR = (w' * sigma) / sqrt(w' * Sigma * w), 参见 Choueifaty & Coignard (2008)
+            individual_vols = returns_df.std().values * np.sqrt(252)
+            dr = float((weights * individual_vols).sum() / portfolio_vol) if portfolio_vol > 0 else 1.0
+
+            # 分散化效益 = 1 - 1/DR
+            diversification_benefit = 1.0 - 1.0 / dr if dr > 1 else 0.0
+
             results = []
             for scenario in scenarios:
                 shock = scenario["shock_pct"]
-                # 基于历史波动率调整冲击
-                returns_df = pd.DataFrame(stock_returns)
-                portfolio_vol = float((returns_df @ weights).std() * np.sqrt(252))
 
-                # 情景损失 = 冲击百分比 × 组合权重
-                portfolio_loss = shock * 100
-                # 考虑分散化效应的调整损失
-                diversified_loss = portfolio_loss * (1 - 0.2 * min(len(stock_returns) - 1, 3) / 3)
+                # 方法1：基于历史波动率的情景损失
+                # 假设冲击服从正态分布，损失 = shock * 组合beta调整
+                # beta = portfolio_vol / market_vol (市场波动率约20%)
+                market_vol = 0.20
+                beta = portfolio_vol / market_vol if market_vol > 0 else 1.0
+                adjusted_shock = shock * beta
+
+                # 方法2：考虑分散化效应
+                # 分散化降低损失的程度取决于资产间相关性
+                # 相关性越高，分散化效益越低，极端情景下损失越大
+                avg_corr = float(corr_matrix.values[np.triu_indices_from(corr_matrix.values, k=1)].mean())
+                # 极端情景下相关性趋近1 (相关性聚集效应,参见 Longin & Solnik (2001))
+                stress_corr = min(1.0, avg_corr + 0.3)  # 压力相关性 = 正常相关性 + 0.3
+                # 分散化调整因子
+                diversification_factor = 1.0 - diversification_benefit * (1.0 - stress_corr)
+                diversified_loss = adjusted_shock * diversification_factor
+
+                # 恢复时间估计（基于历史均值回归速度）
+                mean_daily_return = float(returns_df.mean().mean())
+                recovery_days = int(abs(diversified_loss) / (mean_daily_return * 100) * 1.5) if mean_daily_return > 0 else 999
 
                 results.append({
                     "scenario": scenario["name"],
                     "shock_pct": f"{shock * 100:.0f}%",
-                    "portfolio_loss_pct": round(diversified_loss, 2),
-                    "recovery_days_est": round(abs(diversified_loss) / (portfolio_vol * 100 / np.sqrt(252)) * 1.5, 0) if portfolio_vol > 0 else 0,
+                    "portfolio_loss_pct": round(diversified_loss * 100, 2),
+                    "diversification_adjustment": round((1 - diversification_factor) * 100, 2),
+                    "recovery_days_est": min(recovery_days, 999),
+                    "stress_correlation": round(stress_corr, 3),
                 })
 
             return {
                 "stress_test_results": results,
-                "portfolio_annual_volatility": round(float((returns_df @ weights).std() * np.sqrt(252) * 100), 2),
+                "portfolio_annual_volatility": round(portfolio_vol * 100, 2),
                 "worst_case_loss": min(r["portfolio_loss_pct"] for r in results),
+                "diversification_ratio": round(dr, 3),
+                "average_correlation": round(avg_corr, 3),
+                "methodology": "covariance-based with correlation clustering adjustment (Longin & Solnik, 2001)",
             }
         except Exception as e:
             return {"error": str(e)}
 
     @staticmethod
     def markowitz_optimize(symbols: List[Dict[str, Any]], risk_free_rate: float = 0.03) -> Dict[str, Any]:
-        """马科维茨均值-方差优化 — 计算最优资产配置权重"""
+        """马科维茨均值-方差优化 — scipy精确求解 + 随机采样有效前沿
+
+        References:
+            Markowitz, H. (1952). Portfolio Selection. The Journal of Finance, 7(1), 77-91.
+            Merton, R.C. (1972). An Analytic Derivation of the Efficient Frontier.
+        """
         try:
+            from scipy.optimize import minimize
+
             stock_returns: Dict[str, pd.Series] = {}
             for item in symbols:
                 sym = item["symbol"]
@@ -329,49 +378,76 @@ class MarketTools:
             returns_df = pd.DataFrame(stock_returns)
             mean_returns = returns_df.mean() * 252  # 年化收益
             cov_matrix = returns_df.cov() * 252  # 年化协方差
-
             n_assets = len(stock_returns)
-            # 生成随机有效前沿上的组合
-            n_portfolios = 1000
-            results_list = []
-            for _ in range(n_portfolios):
-                w = np.random.random(n_assets)
-                w = w / np.sum(w)
-                port_return = float(w @ mean_returns.values)
-                port_vol = float(np.sqrt(w @ cov_matrix.values @ w))
-                sharpe = (port_return - risk_free_rate) / port_vol if port_vol > 0 else 0
-                results_list.append({
-                    "weights": w.tolist(),
-                    "return": round(port_return * 100, 2),
-                    "volatility": round(port_vol * 100, 2),
-                    "sharpe": round(sharpe, 2),
-                })
-
-            # 找到最大夏普比率组合
-            max_sharpe = max(results_list, key=lambda x: x["sharpe"])
-            # 找到最小波动率组合
-            min_vol = min(results_list, key=lambda x: x["volatility"])
-
             symbol_list = list(stock_returns.keys())
-            optimal_weights = {
-                symbol_list[i]: round(max_sharpe["weights"][i] * 100, 1) for i in range(n_assets)
-            }
-            conservative_weights = {
-                symbol_list[i]: round(min_vol["weights"][i] * 100, 1) for i in range(n_assets)
-            }
+
+            # ---- scipy 精确求解 ----
+            def portfolio_volatility(w):
+                return float(np.sqrt(w @ cov_matrix.values @ w))
+
+            def neg_sharpe(w):
+                ret = float(w @ mean_returns.values)
+                vol = portfolio_volatility(w)
+                return -(ret - risk_free_rate) / vol if vol > 1e-10 else 0
+
+            constraints = [{"type": "eq", "fun": lambda w: np.sum(w) - 1}]
+            bounds = tuple((0.02, 0.60) for _ in range(n_assets))  # 单资产2%-60%
+            init_w = np.ones(n_assets) / n_assets
+
+            # 最大夏普比率组合
+            opt_sharpe = minimize(neg_sharpe, init_w, method="SLSQP", bounds=bounds, constraints=constraints,
+                                  options={"ftol": 1e-10, "maxiter": 500})
+            w_sharpe = opt_sharpe.x if opt_sharpe.success else init_w
+            w_sharpe = w_sharpe / w_sharpe.sum()
+
+            # 最小波动率组合
+            opt_vol = minimize(portfolio_volatility, init_w, method="SLSQP", bounds=bounds, constraints=constraints,
+                               options={"ftol": 1e-10, "maxiter": 500})
+            w_minvol = opt_vol.x if opt_vol.success else init_w
+            w_minvol = w_minvol / w_minvol.sum()
+
+            # ---- 随机采样生成有效前沿（可视化用） ----
+            n_portfolios = 2000
+            frontier_returns, frontier_vols = [], []
+            for _ in range(n_portfolios):
+                w = np.random.dirichlet(np.ones(n_assets))
+                ret = float(w @ mean_returns.values)
+                vol = float(np.sqrt(w @ cov_matrix.values @ w))
+                frontier_returns.append(ret)
+                frontier_vols.append(vol)
+
+            # 计算精确组合指标
+            def compute_metrics(w):
+                ret = float(w @ mean_returns.values)
+                vol = float(np.sqrt(w @ cov_matrix.values @ w))
+                sharpe = (ret - risk_free_rate) / vol if vol > 1e-10 else 0
+                return ret, vol, sharpe
+
+            max_sharpe_ret, max_sharpe_vol, max_sharpe_ratio = compute_metrics(w_sharpe)
+            min_vol_ret, min_vol_vol, min_vol_sharpe = compute_metrics(w_minvol)
+
+            optimal_weights = {symbol_list[i]: round(float(w_sharpe[i]) * 100, 1) for i in range(n_assets)}
+            conservative_weights = {symbol_list[i]: round(float(w_minvol[i]) * 100, 1) for i in range(n_assets)}
 
             return {
                 "optimal_portfolio": {
                     "weights": optimal_weights,
-                    "expected_return": max_sharpe["return"],
-                    "volatility": max_sharpe["volatility"],
-                    "sharpe_ratio": max_sharpe["sharpe"],
+                    "expected_return": round(max_sharpe_ret * 100, 2),
+                    "volatility": round(max_sharpe_vol * 100, 2),
+                    "sharpe_ratio": round(max_sharpe_ratio, 2),
+                    "solver": "scipy-SLSQP",
                 },
                 "conservative_portfolio": {
                     "weights": conservative_weights,
-                    "expected_return": min_vol["return"],
-                    "volatility": min_vol["volatility"],
-                    "sharpe_ratio": min_vol["sharpe"],
+                    "expected_return": round(min_vol_ret * 100, 2),
+                    "volatility": round(min_vol_vol * 100, 2),
+                    "sharpe_ratio": round(min_vol_sharpe, 2),
+                    "solver": "scipy-SLSQP",
+                },
+                "efficient_frontier": {
+                    "n_samples": n_portfolios,
+                    "returns": [round(r * 100, 2) for r in frontier_returns],
+                    "volatilities": [round(v * 100, 2) for v in frontier_vols],
                 },
             }
         except Exception as e:
