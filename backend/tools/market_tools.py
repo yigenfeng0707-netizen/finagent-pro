@@ -454,14 +454,104 @@ class MarketTools:
             return {"error": str(e)}
 
     @staticmethod
+    def get_esg_rating(symbol: str, market: str = "hk") -> Dict[str, Any]:
+        """ESG评级查询 — 聚合MSCI/商道融绿/华证三家ESG评级数据
+
+        数据源: AKShare免费接口（底层为东方财富/新浪财经公开API）
+        覆盖: MSCI 712只港股 + 商道融绿8200+条 + 华证6250+条
+        """
+        try:
+            result: Dict[str, Any] = {"symbol": symbol, "market": market, "sources": {}}
+
+            # MSCI ESG评级
+            try:
+                df_msci = ak.stock_esg_msci_sina()
+                code = f"{symbol}.HK" if market == "hk" else symbol
+                row = df_msci[df_msci["股票代码"] == code]
+                if not row.empty:
+                    r = row.iloc[0]
+                    result["sources"]["msci"] = {
+                        "rating": r.get("ESG评分", "N/A"),
+                        "environment_score": float(r.get("环境总评", 0)),
+                        "social_score": float(r.get("社会责任总评", 0)),
+                        "governance_score": float(r.get("治理总评", 0)),
+                        "date": str(r.get("评级日期", "")),
+                        "source": "MSCI ESG Ratings",
+                    }
+            except Exception:
+                pass
+
+            # 商道融绿ESG评级
+            try:
+                df_zd = ak.stock_esg_zd_sina()
+                code = f"{symbol}.HK" if market == "hk" else symbol
+                row = df_zd[df_zd["股票代码"] == code]
+                if not row.empty:
+                    r = row.iloc[0]
+                    def _parse_score(val):
+                        try:
+                            return float(str(val).split("(")[0])
+                        except (ValueError, IndexError):
+                            return 0.0
+                    def _parse_grade(val):
+                        try:
+                            return str(val).split("(")[1].rstrip(")")
+                        except (IndexError):
+                            return str(val)
+                    esg_val = r.get("ESG评分", "")
+                    result["sources"]["shangdao_ronglv"] = {
+                        "overall_score": _parse_score(esg_val),
+                        "overall_grade": _parse_grade(esg_val),
+                        "environment_score": _parse_score(r.get("环境总评", "")),
+                        "environment_grade": _parse_grade(r.get("环境总评", "")),
+                        "social_score": _parse_score(r.get("社会责任总评", "")),
+                        "social_grade": _parse_grade(r.get("社会责任总评", "")),
+                        "governance_score": _parse_score(r.get("治理总评", "")),
+                        "governance_grade": _parse_grade(r.get("治理总评", "")),
+                        "date": str(r.get("评分日期", "")),
+                        "source": "商道融绿ESG评级",
+                    }
+            except Exception:
+                pass
+
+            # 华证ESG评级
+            try:
+                df_hz = ak.stock_esg_hz_sina()
+                code = f"{symbol}.HK" if market == "hk" else symbol
+                row = df_hz[df_hz["股票代码"] == code]
+                if not row.empty:
+                    r = row.iloc[0]
+                    result["sources"]["huazheng"] = {
+                        "overall_score": float(r.get("ESG评分", 0)),
+                        "overall_grade": str(r.get("ESG等级", "")),
+                        "environment_score": float(r.get("环境", 0)),
+                        "environment_grade": str(r.get("环境等级", "")),
+                        "social_score": float(r.get("社会", 0)),
+                        "social_grade": str(r.get("社会等级", "")),
+                        "governance_score": float(r.get("公司治理", 0)),
+                        "governance_grade": str(r.get("公司治理等级", "")),
+                        "name": str(r.get("股票名称", "")),
+                        "date": str(r.get("日期", "")),
+                        "source": "华证ESG评级",
+                    }
+            except Exception:
+                pass
+
+            result["data_sources_count"] = len(result["sources"])
+            return result
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
     def get_tool_registry() -> Dict[str, Callable]:
         return {
             "get_stock_price": MarketTools.get_stock_price,
             "get_technical_indicators": MarketTools.get_technical_indicators,
-            "calculate_var": MarketTools.calculate_var,
+            "calculate_var": MarketTools.get_portfolio_risk,
             "get_portfolio_risk": MarketTools.get_portfolio_risk,
             "get_fund_flow": MarketTools.get_fund_flow,
             "get_fundamentals": MarketTools.get_fundamentals,
             "stress_test": MarketTools.stress_test,
             "markowitz_optimize": MarketTools.markowitz_optimize,
+            "get_esg_rating": MarketTools.get_esg_rating,
         }

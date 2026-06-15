@@ -2,20 +2,20 @@
 
 ## [2.2.0] - 2026-06-15
 
-### 冠军品质升级 — 学术级精度 + LLM综合推理 + 竞品对比
+### 冠军品质升级 — 学术级精度 + LLM综合推理 + ESG真实数据 + 竞品对比
 
 **核心算法升级**
 - 马科维茨优化：1000次随机采样 → **scipy SLSQP精确求解**，输出最大夏普比率+最小波动率组合，2000次Dirichlet采样有效前沿（可视化用）
 - 压力测试：经验公式 → **协方差矩阵+相关性聚集(Longin & Solnik, 2001)+分散化比率(Choueifaty & Coignard, 2008)**，学术引用Basel(2009)+Kupiec(2000)
 - 综合报告：关键词匹配 → **多因子评分模型(风险30%+动量25%+情绪25%+夏普20%) + LLM增强综合推理**，3个API端点统一使用`synthesize_report_with_llm`
 
+**ESG真实数据接入（从骨架到真实）**
+- 新增 `get_esg_rating` 工具：聚合MSCI(712只港股)+商道融绿(8200+)+华证(6250+)三家ESG评级
+- ESG Agent从占位数据升级为AKShare真实数据（底层东方财富/新浪财经公开API）
+- 数据缓存机制，避免重复API调用
+
 **SSE流式端点修复**
 - `/api/chat/stream` 末尾补全综合报告生成逻辑：收集agent_messages → synthesize_report → 发送final_report事件
-
-**ESG Agent骨架（Phase 2）**
-- 新增 `esg_analyst.py`：5只港股占位ESG数据 + LLM分析
-- 新增 `/api/esg/analyze` API端点
-- 规划数据源：商道融绿/MSCI/Sustainalytics
 
 **前端工程化**
 - 移除 `react-scripts` 依赖，升级 TypeScript 5.5
