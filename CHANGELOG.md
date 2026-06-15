@@ -2,7 +2,7 @@
 
 ## [2.2.0] - 2026-06-15
 
-### 冠军品质升级 — 学术级精度 + LLM综合推理 + ESG真实数据 + 竞品对比
+### 冠军品质升级 — 学术级精度 + LLM综合推理 + ESG真实数据 + 东方财富数据增强 + 竞品对比
 
 **核心算法升级**
 - 马科维茨优化：1000次随机采样 → **scipy SLSQP精确求解**，输出最大夏普比率+最小波动率组合，2000次Dirichlet采样有效前沿（可视化用）
@@ -21,6 +21,15 @@
 - 移除 `react-scripts` 依赖，升级 TypeScript 5.5
 - 新增 ESLint 配置（.eslintrc.cjs）+ lint/typecheck 脚本
 - package.json 版本号 1.0.0 → 2.1.0
+
+**东方财富数据增强（6个新工具，全部免费）**
+- `get_company_profile` — 公司概况（行业/董事长/员工/介绍）
+- `get_financial_indicator` — 20+财务指标（EPS/ROE/净利率/营收增长/股息率/市值）
+- `get_dividend_history` — 分红派息历史（近10年）
+- `get_valuation_comparison` — 估值对比+行业排名（PE/PB/PS/PCF）
+- `get_growth_comparison` — 成长对比+行业排名（EPS增长/营收增长/利润增长）
+- `get_hot_rank` — 港股实时热度排名TOP20
+- 市场分析师Agent增强：技术面+财务指标+估值对比三维分析
 
 **市场价值增强**
 - 新增竞品深度对比表：FinAgent Pro vs 雪球/富途牛牛/同花顺（8维度）

@@ -543,6 +543,175 @@ class MarketTools:
             return {"error": str(e)}
 
     @staticmethod
+    def get_company_profile(symbol: str, market: str = "hk") -> Dict[str, Any]:
+        """公司概况 — 东方财富数据源
+
+        包含: 公司名称、注册地、行业、董事长、员工人数、公司介绍等
+        """
+        try:
+            df = ak.stock_hk_company_profile_em(symbol=symbol)
+            if df.empty:
+                return {"error": f"未找到 {symbol} 的公司概况"}
+            r = df.iloc[0]
+            return {
+                "symbol": symbol,
+                "name": str(r.get("公司名称", "")),
+                "english_name": str(r.get("英文名称", "")),
+                "industry": str(r.get("所属行业", "")),
+                "chairman": str(r.get("董事长", "")),
+                "employees": str(r.get("员工人数", "")),
+                "established": str(r.get("公司成立日期", "")),
+                "website": str(r.get("公司网址", "")),
+                "introduction": str(r.get("公司介绍", ""))[:500],
+                "source": "东方财富",
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    def get_financial_indicator(symbol: str, market: str = "hk") -> Dict[str, Any]:
+        """财务指标 — 东方财富数据源
+
+        包含: EPS、净资产、股息率、市值、营收、净利、ROE、PE、PB等20+指标
+        """
+        try:
+            df = ak.stock_hk_financial_indicator_em(symbol=symbol)
+            if df.empty:
+                return {"error": f"未找到 {symbol} 的财务指标"}
+            r = df.iloc[0]
+            return {
+                "symbol": symbol,
+                "eps": float(r.get("基本每股收益(元)", 0)),
+                "book_value_per_share": float(r.get("每股净资产(元)", 0)),
+                "dividend_ttm": float(r.get("每股股息TTM(港元)", 0)),
+                "payout_ratio": float(r.get("派息比率(%)", 0)),
+                "dividend_yield": float(r.get("股息率TTM(%)", 0)),
+                "total_market_cap": float(r.get("总市值(港元)", 0)),
+                "revenue": float(r.get("营业总收入", 0)),
+                "revenue_growth": float(r.get("营业总收入滚动环比增长(%)", 0)),
+                "net_profit": float(r.get("净利润", 0)),
+                "net_profit_growth": float(r.get("净利润滚动环比增长(%)", 0)),
+                "net_margin": float(r.get("销售净利率(%)", 0)),
+                "roe": float(r.get("股东权益回报率(%)", 0)),
+                "pe_ratio": float(r.get("市盈率", 0)),
+                "pb_ratio": float(r.get("市净率", 0)),
+                "roa": float(r.get("总资产回报率(%)", 0)),
+                "cash_flow_per_share": float(r.get("每股经营现金流(元)", 0)),
+                "source": "东方财富",
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    def get_dividend_history(symbol: str, market: str = "hk") -> Dict[str, Any]:
+        """分红派息历史 — 东方财富数据源
+
+        包含: 历年分红方案、除净日、发放日
+        """
+        try:
+            df = ak.stock_hk_dividend_payout_em(symbol=symbol)
+            if df.empty:
+                return {"error": f"未找到 {symbol} 的分红历史"}
+            records = []
+            for _, row in df.head(10).iterrows():
+                records.append({
+                    "fiscal_year": str(row.get("财政年度", "")),
+                    "dividend_plan": str(row.get("分红方案", "")),
+                    "type": str(row.get("分配类型", "")),
+                    "ex_dividend_date": str(row.get("除净日", "")),
+                    "payment_date": str(row.get("发放日", "")),
+                })
+            return {
+                "symbol": symbol,
+                "dividend_count": len(df),
+                "recent_dividends": records,
+                "source": "东方财富",
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    def get_valuation_comparison(symbol: str, market: str = "hk") -> Dict[str, Any]:
+        """估值对比 — 东方财富数据源
+
+        包含: PE/PB/PS/PCF及行业排名
+        """
+        try:
+            df = ak.stock_hk_valuation_comparison_em(symbol=symbol)
+            if df.empty:
+                return {"error": f"未找到 {symbol} 的估值对比"}
+            r = df.iloc[0]
+            return {
+                "symbol": symbol,
+                "name": str(r.get("简称", "")),
+                "pe_ttm": float(r.get("市盈率-TTM", 0)),
+                "pe_ttm_rank": int(r.get("市盈率-TTM排名", 0)),
+                "pb_mrq": float(r.get("市净率-MRQ", 0)),
+                "pb_mrq_rank": int(r.get("市净率-MRQ排名", 0)),
+                "ps_ttm": float(r.get("市销率-TTM", 0)),
+                "ps_ttm_rank": int(r.get("市销率-TTM排名", 0)),
+                "pcf_ttm": float(r.get("市现率-TTM", 0)),
+                "pcf_ttm_rank": int(r.get("市现率-TTM排名", 0)),
+                "source": "东方财富",
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    def get_growth_comparison(symbol: str, market: str = "hk") -> Dict[str, Any]:
+        """成长对比 — 东方财富数据源
+
+        包含: EPS增长、营收增长、利润增长及行业排名
+        """
+        try:
+            df = ak.stock_hk_growth_comparison_em(symbol=symbol)
+            if df.empty:
+                return {"error": f"未找到 {symbol} 的成长对比"}
+            r = df.iloc[0]
+            return {
+                "symbol": symbol,
+                "name": str(r.get("简称", "")),
+                "eps_growth": float(r.get("基本每股收益同比增长率", 0)),
+                "eps_growth_rank": int(r.get("基本每股收益同比增长率排名", 0)),
+                "revenue_growth": float(r.get("营业收入同比增长率", 0)),
+                "revenue_growth_rank": int(r.get("营业收入同比增长率排名", 0)),
+                "profit_margin_growth": float(r.get("营业利润率同比增长率", 0)),
+                "profit_margin_growth_rank": int(r.get("营业利润率同比增长率排名", 0)),
+                "total_asset_growth": float(r.get("基本每股收总资产同比增长率益同比增长率", 0)),
+                "total_asset_growth_rank": int(r.get("总资产同比增长率排名", 0)),
+                "source": "东方财富",
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    def get_hot_rank(top_n: int = 20) -> Dict[str, Any]:
+        """港股热度排名 — 东方财富数据源
+
+        实时反映市场关注度最高的港股
+        """
+        try:
+            df = ak.stock_hk_hot_rank_em()
+            if df.empty:
+                return {"error": "无法获取港股热度排名"}
+            records = []
+            for _, row in df.head(top_n).iterrows():
+                records.append({
+                    "rank": int(row.get("当前排名", 0)),
+                    "symbol": str(row.get("代码", "")),
+                    "name": str(row.get("股票名称", "")),
+                    "price": float(row.get("最新价", 0)),
+                    "change_pct": float(row.get("涨跌幅", 0)),
+                })
+            return {
+                "hot_stocks": records,
+                "total_count": len(df),
+                "source": "东方财富",
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
     def get_tool_registry() -> Dict[str, Callable]:
         return {
             "get_stock_price": MarketTools.get_stock_price,
@@ -554,4 +723,10 @@ class MarketTools:
             "stress_test": MarketTools.stress_test,
             "markowitz_optimize": MarketTools.markowitz_optimize,
             "get_esg_rating": MarketTools.get_esg_rating,
+            "get_company_profile": MarketTools.get_company_profile,
+            "get_financial_indicator": MarketTools.get_financial_indicator,
+            "get_dividend_history": MarketTools.get_dividend_history,
+            "get_valuation_comparison": MarketTools.get_valuation_comparison,
+            "get_growth_comparison": MarketTools.get_growth_comparison,
+            "get_hot_rank": MarketTools.get_hot_rank,
         }

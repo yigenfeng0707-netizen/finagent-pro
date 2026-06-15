@@ -20,10 +20,20 @@ class MarketAnalyst(BaseAgent):
         self.register_tool("get_stock_price", MarketTools.get_stock_price)
         self.register_tool("get_technical_indicators", MarketTools.get_technical_indicators)
         self.register_tool("get_fundamentals", MarketTools.get_fundamentals)
+        self.register_tool("get_company_profile", MarketTools.get_company_profile)
+        self.register_tool("get_financial_indicator", MarketTools.get_financial_indicator)
+        self.register_tool("get_valuation_comparison", MarketTools.get_valuation_comparison)
+        self.register_tool("get_growth_comparison", MarketTools.get_growth_comparison)
+        self.register_tool("get_dividend_history", MarketTools.get_dividend_history)
+        self.register_tool("get_hot_rank", MarketTools.get_hot_rank)
 
     async def analyze(self, symbol: str, market: str = "hk", context: Optional[Dict[str, Any]] = None) -> AgentMessage:
         try:
+            # 并行获取技术指标+财务指标+估值对比
             indicators = await self.call_tool("get_technical_indicators", symbol=symbol, market=market)
+            financial = await self.call_tool("get_financial_indicator", symbol=symbol, market=market)
+            valuation = await self.call_tool("get_valuation_comparison", symbol=symbol, market=market)
+
             if "error" in indicators:
                 return self.make_message(
                     agent_name="市场分析师",
@@ -40,8 +50,31 @@ class MarketAnalyst(BaseAgent):
                 f"5日均线: {indicators['ma5']} | 20日均线: {indicators['ma20']}\n"
                 f"RSI: {indicators['rsi']} | 波动率: {indicators['volatility']}%\n"
                 f"布林带上轨: {indicators['bb_upper']} | 下轨: {indicators['bb_lower']}\n"
-                "正在结合技术指标生成综合判断..."
             )
+
+            # 构建增强版分析Prompt
+            financial_info = ""
+            if financial and "error" not in financial:
+                financial_info = (
+                    f"\n财务指标:\n"
+                    f"  - EPS: {financial.get('eps', 'N/A')}\n"
+                    f"  - ROE: {financial.get('roe', 'N/A')}%\n"
+                    f"  - 净利率: {financial.get('net_margin', 'N/A')}%\n"
+                    f"  - 营收增长: {financial.get('revenue_growth', 'N/A')}%\n"
+                    f"  - 净利增长: {financial.get('net_profit_growth', 'N/A')}%\n"
+                    f"  - 股息率: {financial.get('dividend_yield', 'N/A')}%\n"
+                    f"  - 总市值: {financial.get('total_market_cap', 'N/A')} 港元\n"
+                )
+                thinking += f"ROE: {financial.get('roe', 'N/A')}% | 营收增长: {financial.get('revenue_growth', 'N/A')}%\n"
+
+            valuation_info = ""
+            if valuation and "error" not in valuation:
+                valuation_info = (
+                    f"\n估值对比(行业排名):\n"
+                    f"  - PE(TTM): {valuation.get('pe_ttm', 'N/A')} (排名 {valuation.get('pe_ttm_rank', 'N/A')})\n"
+                    f"  - PB(MRQ): {valuation.get('pb_mrq', 'N/A')} (排名 {valuation.get('pb_mrq_rank', 'N/A')})\n"
+                    f"  - PS(TTM): {valuation.get('ps_ttm', 'N/A')} (排名 {valuation.get('ps_ttm_rank', 'N/A')})\n"
+                )
 
             prompt = (
                 f"你是一位资深港股市场分析师。请分析以下股票数据并给出专业判断。\n\n"
@@ -57,12 +90,16 @@ class MarketAnalyst(BaseAgent):
                 f"  - RSI(14): {indicators['rsi']}\n"
                 f"  - 波动率: {indicators['volatility']}%\n"
                 f"  - 布林带上轨/下轨: {indicators['bb_upper']}/{indicators['bb_lower']}\n"
-                f"  - 52周最高/最低: {indicators['high_52w']}/{indicators['low_52w']}\n\n"
-                f"请提供:\n"
+                f"  - 52周最高/最低: {indicators['high_52w']}/{indicators['low_52w']}\n"
+                f"{financial_info}"
+                f"{valuation_info}"
+                f"\n请提供:\n"
                 f"1. 技术面分析（均线排列、趋势判断、支撑阻力位）\n"
-                f"2. 短期走势预测（1-2周）\n"
-                f"3. 投资建议（买入/持有/卖出及理由）\n"
-                f"4. 关键风险提示\n"
+                f"2. 基本面分析（财务健康度、盈利能力、成长性）\n"
+                f"3. 估值分析（当前估值水平、行业对比）\n"
+                f"4. 短期走势预测（1-2周）\n"
+                f"5. 投资建议（买入/持有/卖出及理由）\n"
+                f"6. 关键风险提示\n"
                 f"请用中文回答，保持专业且简洁。"
             )
 
@@ -78,12 +115,19 @@ class MarketAnalyst(BaseAgent):
                 else:
                     confidence = 0.5
 
+            # 合并数据
+            combined_data = {**indicators}
+            if financial and "error" not in financial:
+                combined_data["financial"] = financial
+            if valuation and "error" not in valuation:
+                combined_data["valuation"] = valuation
+
             return self.make_message(
                 agent_name="市场分析师",
                 role=AgentRole.MARKET_ANALYST,
                 content=llm_output,
                 confidence=round(confidence, 2),
-                data=indicators,
+                data=combined_data,
                 thinking=thinking,
             )
 
