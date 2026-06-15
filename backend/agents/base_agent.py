@@ -1,7 +1,7 @@
 import asyncio
 import os
 from datetime import datetime
-from typing import Any, Callable, Dict, Optional
+from typing import Any, AsyncIterator, Callable, Dict, Optional
 
 from crewai import Agent
 from dotenv import load_dotenv
@@ -94,6 +94,18 @@ class BaseAgent:
         except Exception as e:
             logger.error(f"备选模型也失败: {e}")
             return f"LLM调用失败: 主模型({last_error}), 备选模型({e})"
+
+    async def run_llm_stream(self, prompt: str) -> AsyncIterator[str]:
+        """流式调用 LLM，逐 token 返回"""
+        messages = [{"role": "user", "content": prompt}]
+        try:
+            async for chunk in self.llm.astream(messages):
+                if hasattr(chunk, "content") and chunk.content:
+                    yield chunk.content
+        except Exception as e:
+            logger.warning(f"流式LLM调用失败，回退到非流式: {e}")
+            result = await self.run_llm(prompt)
+            yield result
 
     def make_message(
         self,

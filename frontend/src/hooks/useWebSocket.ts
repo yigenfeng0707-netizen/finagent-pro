@@ -17,11 +17,11 @@ const WS_BASE = process.env.REACT_APP_WS_URL || `ws://${window.location.hostname
 const MAX_RETRIES = 5;
 const BASE_DELAY = 1000;
 
-export function useWebSocket(sessionId: string | null, options: WSOptions) {
+export function useWebSocket(sessionId: string | null, options: WSOptions & { token?: string }) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
   const retryCount = useRef(0);
-  
+
   // Store latest callbacks in refs to prevent re-renders
   const callbacksRef = useRef(options);
   callbacksRef.current = options;
@@ -40,7 +40,11 @@ export function useWebSocket(sessionId: string | null, options: WSOptions) {
     if (!sessionId || !callbacksRef.current.enabled) return;
     if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) return;
 
-    const url = `${WS_BASE}/ws/${sessionId}`;
+    let url = `${WS_BASE}/ws/${sessionId}`;
+    const token = callbacksRef.current.token;
+    if (token) {
+      url += `?token=${encodeURIComponent(token)}`;
+    }
     const ws = new WebSocket(url);
 
     ws.onopen = () => {

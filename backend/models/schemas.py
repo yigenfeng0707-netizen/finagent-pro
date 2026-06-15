@@ -68,6 +68,10 @@ class FinalReport(BaseModel):
     reasoning: str
     portfolio_allocation: List[Dict[str, Any]]
     agent_messages: List[AgentMessage]
+    cvar_95: Optional[float] = None
+    sharpe_ratio: Optional[float] = None
+    annual_return: Optional[float] = None
+    annual_volatility: Optional[float] = None
 
 
 class OrchestratorRequest(BaseModel):

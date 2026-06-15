@@ -20,6 +20,7 @@ class RiskManager(BaseAgent):
         self.register_tool("get_portfolio_risk", MarketTools.get_portfolio_risk)
         self.register_tool("calculate_var", MarketTools.calculate_var)
         self.register_tool("get_stock_price", MarketTools.get_stock_price)
+        self.register_tool("stress_test", MarketTools.stress_test)
 
     async def analyze(
         self,

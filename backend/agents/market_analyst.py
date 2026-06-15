@@ -19,6 +19,7 @@ class MarketAnalyst(BaseAgent):
         )
         self.register_tool("get_stock_price", MarketTools.get_stock_price)
         self.register_tool("get_technical_indicators", MarketTools.get_technical_indicators)
+        self.register_tool("get_fundamentals", MarketTools.get_fundamentals)
 
     async def analyze(self, symbol: str, market: str = "hk", context: Optional[Dict[str, Any]] = None) -> AgentMessage:
         try:

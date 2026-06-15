@@ -3,6 +3,8 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 from models.schemas import AgentMessage, AgentRole, AgentStatus
 
+from tools.market_tools import MarketTools
+
 from .base_agent import BaseAgent
 
 
@@ -16,6 +18,7 @@ class PortfolioAdvisor(BaseAgent):
             "你精通现代投资组合理论、马科维茨模型、黑-李特曼模型等资产配置方法。"
             "你善于根据投资者的风险承受能力、投资期限、收益目标，定制个性化投资方案。",
         )
+        self.register_tool("markowitz_optimize", MarketTools.markowitz_optimize)
 
     async def advise(
         self,

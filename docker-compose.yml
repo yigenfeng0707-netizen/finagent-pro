@@ -3,7 +3,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: finagent
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finagent_dev_123}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请设置POSTGRES_PASSWORD环境变量}
       POSTGRES_DB: finagent_pro
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -16,12 +16,12 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: redis-server --requirepass ${REDIS_PASSWORD:-redis_dev_123}
+    command: redis-server --requirepass ${REDIS_PASSWORD:?请设置REDIS_PASSWORD环境变量}
     volumes:
       - redis-data:/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_dev_123}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -36,8 +36,8 @@ services:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - ZHIPU_API_KEY=${ZHIPU_API_KEY}
       - FINNHUB_API_KEY=${FINNHUB_API_KEY}
-      - DATABASE_URL=postgresql+asyncpg://finagent:${POSTGRES_PASSWORD:-finagent_dev_123}@postgres:5432/finagent_pro
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_dev_123}@redis:6379/0
+      - DATABASE_URL=postgresql+asyncpg://finagent:${POSTGRES_PASSWORD}@postgres:5432/finagent_pro
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - ENV=production
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
       - JWT_SECRET=${JWT_SECRET}

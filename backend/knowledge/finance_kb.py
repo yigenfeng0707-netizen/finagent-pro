@@ -255,6 +255,54 @@ class FinanceKnowledgeBase:
 
         self.collection.add(ids=[doc_id], documents=[content], metadatas=[metadata])
 
+    def add_batch(self, items: List[Dict[str, Any]]) -> int:
+        """批量添加知识条目，返回成功添加的数量"""
+        ids, docs, metas = [], [], []
+        for item in items:
+            content = item.get("content", "")
+            if not content:
+                continue
+            doc_id = item.get("id") or f"batch_{self.collection.count()}_{len(ids)}"
+            metadata = item.get("metadata", {})
+            ids.append(doc_id)
+            docs.append(content)
+            metas.append(metadata)
+        if ids:
+            self.collection.add(ids=ids, documents=docs, metadatas=metas)
+        return len(ids)
+
+    def delete_knowledge(self, doc_ids: List[str]) -> bool:
+        """删除指定ID的知识条目"""
+        try:
+            self.collection.delete(ids=doc_ids)
+            return True
+        except Exception as e:
+            logger.warning(f"删除知识条目失败: {e}")
+            return False
+
+    def get_stats(self) -> Dict[str, Any]:
+        """获取知识库统计信息"""
+        return {
+            "total_documents": self.collection.count(),
+            "collection_name": self.collection.name,
+        }
+
+    def list_knowledge(self, limit: int = 20, offset: int = 0) -> Dict[str, Any]:
+        """列出知识库中的条目"""
+        try:
+            count = self.collection.count()
+            results = self.collection.get(limit=limit, offset=offset)
+            items = []
+            for i in range(len(results["ids"])):
+                items.append({
+                    "id": results["ids"][i],
+                    "content": results["documents"][i] if results["documents"] else "",
+                    "metadata": results["metadatas"][i] if results["metadatas"] else {},
+                })
+            return {"total": count, "items": items, "limit": limit, "offset": offset}
+        except Exception as e:
+            return {"total": 0, "items": [], "error": str(e)}
+
 
 # 全局实例
 finance_kb = FinanceKnowledgeBase()

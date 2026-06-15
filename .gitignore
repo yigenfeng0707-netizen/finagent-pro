@@ -53,3 +53,15 @@ SESSION_SUMMARY.md
 
 # Frontend scripts
 frontend/scripts/
+
+# Root node_modules (md-to-pdf etc.)
+node_modules/
+package.json
+package-lock.json
+nul
+
+# Generated scripts (used to create docx)
+gen_*.js
+
+# Temp logs
+ci_log.txt

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import uuid
 from contextlib import asynccontextmanager
@@ -11,6 +12,7 @@ from dotenv import load_dotenv
 from exception_handlers import AgentExecutionError, DataFetchError, setup_exception_handlers
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from knowledge.finance_kb import FinanceKnowledgeBase
 from loguru import logger
 from middleware import RateLimitMiddleware
@@ -108,7 +110,18 @@ async def optional_auth(request: Request):
 
 
 @app.websocket("/ws/{session_id}")
-async def websocket_endpoint(websocket: WebSocket, session_id: str):
+async def websocket_endpoint(websocket: WebSocket, session_id: str, token: str = ""):
+    # WebSocket 认证: 开发模式可选，生产环境强制
+    if os.getenv("ENV", "development") == "production":
+        if not token:
+            await websocket.close(code=4001, reason="Missing authentication token")
+            return
+        from auth.jwt import verify_token
+
+        payload = verify_token(token)
+        if not payload or payload.get("type") != "access":
+            await websocket.close(code=4001, reason="Invalid or expired token")
+            return
     await ws_manager.connect(session_id, websocket)
     try:
         while True:
@@ -220,32 +233,26 @@ def _build_sync_context(agent_messages, request):
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest, auth=Depends(optional_auth)):
-    """智能对话入口 - 自然语言请求→自动编排Agent"""
+    """智能对话入口 - 自然语言请求→意图识别→自动编排Agent"""
     try:
-        session_id = request.session_id or str(uuid.uuid4())
-        msg = request.message.lower()
+        from services.intent_parser import parse_user_intent
 
-        if any(w in msg for w in ["腾讯", "00700", "tencent"]):
-            symbols = ["00700"]
-        elif any(w in msg for w in ["阿里", "09988", "alibaba"]):
-            symbols = ["09988"]
-        elif any(w in msg for w in ["美团", "03690"]):
-            symbols = ["03690"]
-        elif any(w in msg for w in ["小米", "01810"]):
-            symbols = ["01810"]
-        else:
+        session_id = request.session_id or str(uuid.uuid4())
+
+        # 使用意图识别模块解析用户请求
+        intent = await parse_user_intent(request.message, run_llm_func=orchestrator.market_analyst.run_llm)
+
+        if intent["intent"] == "chat" or not intent["symbols"]:
             return {
                 "type": "general",
                 "session_id": session_id,
                 "message": "您好！我是FinAgent Pro智能投顾助手。请告诉我您想分析哪只港股？"
-                "例如: 分析腾讯、阿里怎么样、帮我看看美团",
+                "例如: 分析腾讯、阿里怎么样、帮我看看美团、10万保守型投资建议",
             }
 
-        risk_pref = "moderate"
-        if any(w in msg for w in ["保守", "稳健"]):
-            risk_pref = "conservative"
-        elif any(w in msg for w in ["进取", "激进"]):
-            risk_pref = "aggressive"
+        symbols = intent["symbols"]
+        risk_pref = intent["risk_preference"]
+        investment_amount = intent["investment_amount"]
 
         agent_messages = []
 
@@ -256,7 +263,7 @@ async def chat(request: ChatRequest, auth=Depends(optional_auth)):
 
         try:
             async for agent_msg in orchestrator.run(
-                symbols=symbols, investment_amount=100000, risk_preference=risk_pref, market="hk", session_id=session_id
+                symbols=symbols, investment_amount=investment_amount, risk_preference=risk_pref, market="hk", session_id=session_id
             ):
                 agent_messages.append(agent_msg)
         finally:
@@ -264,7 +271,7 @@ async def chat(request: ChatRequest, auth=Depends(optional_auth)):
 
         from types import SimpleNamespace
 
-        req_obj = SimpleNamespace(symbols=symbols, risk_preference=risk_pref, investment_amount=100000, market="hk")
+        req_obj = SimpleNamespace(symbols=symbols, risk_preference=risk_pref, investment_amount=investment_amount, market="hk")
         ctx = _build_sync_context(agent_messages, req_obj)
         report = orchestrator.synthesize_report(ctx)
         await ws_manager.broadcast_final(session_id, report.model_dump())
@@ -273,6 +280,58 @@ async def chat(request: ChatRequest, auth=Depends(optional_auth)):
 
     except Exception as e:
         raise AgentExecutionError("chat", str(e))
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(request: ChatRequest, auth=Depends(optional_auth)):
+    """SSE 流式聊天端点 — 逐 token 返回 LLM 响应"""
+    from services.intent_parser import parse_user_intent
+
+    intent = await parse_user_intent(request.message, run_llm_func=orchestrator.market_analyst.run_llm)
+
+    if intent["intent"] == "chat" or not intent["symbols"]:
+        async def simple_stream():
+            yield f"data: {json.dumps({'type': 'text', 'content': '您好！我是FinAgent Pro智能投顾助手。请告诉我您想分析哪只港股？'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+        return StreamingResponse(simple_stream(), media_type="text/event-stream")
+
+    symbols = intent["symbols"]
+    risk_pref = intent["risk_preference"]
+    investment_amount = intent["investment_amount"]
+    session_id = request.session_id or str(uuid.uuid4())
+
+    async def event_stream():
+        # 发送意图识别结果
+        yield f"data: {json.dumps({'type': 'intent', 'data': intent}, ensure_ascii=False)}\n\n"
+
+        # 流式执行 Agent 编排
+        async def on_message(msg):
+            pass  # SSE 不需要额外广播
+
+        orchestrator.on_progress(session_id, on_message)
+        try:
+            async for agent_msg in orchestrator.run(
+                symbols=symbols, investment_amount=investment_amount, risk_preference=risk_pref, market="hk", session_id=session_id
+            ):
+                msg_data = {
+                    "type": "agent_progress",
+                    "agent": agent_msg.agent,
+                    "role": agent_msg.role.value if hasattr(agent_msg.role, 'value') else str(agent_msg.role),
+                    "content": agent_msg.content,
+                    "status": agent_msg.status.value if hasattr(agent_msg.status, 'value') else str(agent_msg.status),
+                    "timestamp": agent_msg.timestamp,
+                }
+                yield f"data: {json.dumps(msg_data, ensure_ascii=False)}\n\n"
+        finally:
+            orchestrator.remove_progress(session_id)
+
+        # 生成最终报告
+        from types import SimpleNamespace
+        req_obj = SimpleNamespace(symbols=symbols, risk_preference=risk_pref, investment_amount=investment_amount, market="hk")
+        # 收集 agent_messages 需要在 run 中保存
+        yield f"data: {json.dumps({'type': 'done', 'session_id': session_id}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.post("/api/stock/analyze")
@@ -371,6 +430,48 @@ async def query_knowledge(query: str, top_k: int = 3):
         return {"status": "success", "query": query, "results": results}
     except Exception as e:
         raise DataFetchError("knowledge_base", str(e))
+
+
+@app.get("/api/knowledge/stats")
+async def knowledge_stats():
+    """知识库统计信息"""
+    return {"status": "success", "data": finance_kb.get_stats()}
+
+
+@app.get("/api/knowledge/list")
+async def knowledge_list(limit: int = 20, offset: int = 0):
+    """列出知识库条目"""
+    return {"status": "success", "data": finance_kb.list_knowledge(limit, offset)}
+
+
+@app.post("/api/knowledge/add")
+async def knowledge_add(content: str, category: str = "自定义", doc_id: str = None, auth=Depends(optional_auth)):
+    """添加知识条目"""
+    try:
+        finance_kb.add_knowledge(content, {"category": category, "type": "自定义"}, doc_id=doc_id)
+        return {"status": "success", "message": "知识条目已添加"}
+    except Exception as e:
+        raise DataFetchError("knowledge_add", str(e))
+
+
+@app.post("/api/knowledge/batch")
+async def knowledge_batch_add(items: list, auth=Depends(optional_auth)):
+    """批量添加知识条目"""
+    try:
+        count = finance_kb.add_batch(items)
+        return {"status": "success", "added": count}
+    except Exception as e:
+        raise DataFetchError("knowledge_batch_add", str(e))
+
+
+@app.delete("/api/knowledge/delete")
+async def knowledge_delete(doc_ids: list, auth=Depends(optional_auth)):
+    """删除知识条目"""
+    try:
+        success = finance_kb.delete_knowledge(doc_ids)
+        return {"status": "success" if success else "failed"}
+    except Exception as e:
+        raise DataFetchError("knowledge_delete", str(e))
 
 
 # ========== 启动 ==========

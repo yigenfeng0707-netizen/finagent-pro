@@ -192,6 +192,192 @@ class MarketTools:
             return {"error": str(e)}
 
     @staticmethod
+    def get_fundamentals(symbol: str, market: str = "hk") -> Dict[str, Any]:
+        """获取股票基本面数据（估值指标、财务摘要）"""
+        try:
+            from services.market_data import MarketDataService
+
+            svc = MarketDataService()
+            info = svc.get_stock_info(symbol, market)
+            if "error" in info:
+                return info
+
+            # 尝试获取额外基本面数据
+            pe_ratio = None
+            pb_ratio = None
+            try:
+                if market == "hk":
+                    df_profile = ak.stock_hk_profile_em(symbol=symbol)
+                    if df_profile is not None and not df_profile.empty:
+                        row = df_profile.iloc[0]
+                        for col in df_profile.columns:
+                            col_lower = str(col).lower()
+                            if "市盈率" in str(col) or "pe" in col_lower:
+                                try:
+                                    pe_ratio = round(float(row[col]), 2)
+                                except (ValueError, TypeError):
+                                    pass
+                            elif "市净率" in str(col) or "pb" in col_lower:
+                                try:
+                                    pb_ratio = round(float(row[col]), 2)
+                                except (ValueError, TypeError):
+                                    pass
+            except Exception:
+                pass
+
+            return {
+                "symbol": symbol,
+                "name": info.get("name", ""),
+                "current_price": info.get("current_price"),
+                "market_cap": info.get("turnover"),
+                "pe_ratio": pe_ratio,
+                "pb_ratio": pb_ratio,
+                "volatility": info.get("volatility"),
+                "high_52w": info.get("high_52w"),
+                "low_52w": info.get("low_52w"),
+                "ma5": info.get("ma5"),
+                "ma20": info.get("ma20"),
+                "ma60": info.get("ma60"),
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    def stress_test(symbols: List[Dict[str, Any]], scenarios: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """压力测试 — 模拟极端市场情景下的组合损失"""
+        try:
+            if scenarios is None:
+                scenarios = [
+                    {"name": "2008金融危机", "shock_pct": -0.40},
+                    {"name": "2015股灾", "shock_pct": -0.30},
+                    {"name": "2020疫情冲击", "shock_pct": -0.25},
+                    {"name": "温和回调", "shock_pct": -0.10},
+                ]
+
+            stock_returns: Dict[str, pd.Series] = {}
+            for item in symbols:
+                sym = item["symbol"]
+                market = item.get("market", "hk")
+                if market == "hk":
+                    end = pd.Timestamp.now()
+                    start = end - pd.Timedelta(days=365)
+                    df = ak.stock_hk_hist(
+                        symbol=sym, period="daily", start_date=start.strftime("%Y%m%d"), end_date=end.strftime("%Y%m%d")
+                    )
+                    if not df.empty:
+                        df["return"] = df["收盘"].pct_change()
+                        rets = df["return"].dropna()
+                        if not rets.empty:
+                            stock_returns[sym] = rets.reset_index(drop=True)
+
+            if not stock_returns:
+                return {"error": "无法获取数据执行压力测试"}
+
+            weights = np.array([item.get("weight", 1.0 / len(symbols)) for item in symbols if item["symbol"] in stock_returns])
+            weights = weights / weights.sum()
+
+            results = []
+            for scenario in scenarios:
+                shock = scenario["shock_pct"]
+                # 基于历史波动率调整冲击
+                returns_df = pd.DataFrame(stock_returns)
+                portfolio_vol = float((returns_df @ weights).std() * np.sqrt(252))
+
+                # 情景损失 = 冲击百分比 × 组合权重
+                portfolio_loss = shock * 100
+                # 考虑分散化效应的调整损失
+                diversified_loss = portfolio_loss * (1 - 0.2 * min(len(stock_returns) - 1, 3) / 3)
+
+                results.append({
+                    "scenario": scenario["name"],
+                    "shock_pct": f"{shock * 100:.0f}%",
+                    "portfolio_loss_pct": round(diversified_loss, 2),
+                    "recovery_days_est": round(abs(diversified_loss) / (portfolio_vol * 100 / np.sqrt(252)) * 1.5, 0) if portfolio_vol > 0 else 0,
+                })
+
+            return {
+                "stress_test_results": results,
+                "portfolio_annual_volatility": round(float((returns_df @ weights).std() * np.sqrt(252) * 100), 2),
+                "worst_case_loss": min(r["portfolio_loss_pct"] for r in results),
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    def markowitz_optimize(symbols: List[Dict[str, Any]], risk_free_rate: float = 0.03) -> Dict[str, Any]:
+        """马科维茨均值-方差优化 — 计算最优资产配置权重"""
+        try:
+            stock_returns: Dict[str, pd.Series] = {}
+            for item in symbols:
+                sym = item["symbol"]
+                market = item.get("market", "hk")
+                if market == "hk":
+                    end = pd.Timestamp.now()
+                    start = end - pd.Timedelta(days=365)
+                    df = ak.stock_hk_hist(
+                        symbol=sym, period="daily", start_date=start.strftime("%Y%m%d"), end_date=end.strftime("%Y%m%d")
+                    )
+                    if not df.empty:
+                        df["return"] = df["收盘"].pct_change()
+                        rets = df["return"].dropna()
+                        if not rets.empty:
+                            stock_returns[sym] = rets.reset_index(drop=True)
+
+            if len(stock_returns) < 2:
+                return {"error": "至少需要2只股票才能进行马科维茨优化"}
+
+            returns_df = pd.DataFrame(stock_returns)
+            mean_returns = returns_df.mean() * 252  # 年化收益
+            cov_matrix = returns_df.cov() * 252  # 年化协方差
+
+            n_assets = len(stock_returns)
+            # 生成随机有效前沿上的组合
+            n_portfolios = 1000
+            results_list = []
+            for _ in range(n_portfolios):
+                w = np.random.random(n_assets)
+                w = w / np.sum(w)
+                port_return = float(w @ mean_returns.values)
+                port_vol = float(np.sqrt(w @ cov_matrix.values @ w))
+                sharpe = (port_return - risk_free_rate) / port_vol if port_vol > 0 else 0
+                results_list.append({
+                    "weights": w.tolist(),
+                    "return": round(port_return * 100, 2),
+                    "volatility": round(port_vol * 100, 2),
+                    "sharpe": round(sharpe, 2),
+                })
+
+            # 找到最大夏普比率组合
+            max_sharpe = max(results_list, key=lambda x: x["sharpe"])
+            # 找到最小波动率组合
+            min_vol = min(results_list, key=lambda x: x["volatility"])
+
+            symbol_list = list(stock_returns.keys())
+            optimal_weights = {
+                symbol_list[i]: round(max_sharpe["weights"][i] * 100, 1) for i in range(n_assets)
+            }
+            conservative_weights = {
+                symbol_list[i]: round(min_vol["weights"][i] * 100, 1) for i in range(n_assets)
+            }
+
+            return {
+                "optimal_portfolio": {
+                    "weights": optimal_weights,
+                    "expected_return": max_sharpe["return"],
+                    "volatility": max_sharpe["volatility"],
+                    "sharpe_ratio": max_sharpe["sharpe"],
+                },
+                "conservative_portfolio": {
+                    "weights": conservative_weights,
+                    "expected_return": min_vol["return"],
+                    "volatility": min_vol["volatility"],
+                    "sharpe_ratio": min_vol["sharpe"],
+                },
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
     def get_tool_registry() -> Dict[str, Callable]:
         return {
             "get_stock_price": MarketTools.get_stock_price,
@@ -199,4 +385,7 @@ class MarketTools:
             "calculate_var": MarketTools.calculate_var,
             "get_portfolio_risk": MarketTools.get_portfolio_risk,
             "get_fund_flow": MarketTools.get_fund_flow,
+            "get_fundamentals": MarketTools.get_fundamentals,
+            "stress_test": MarketTools.stress_test,
+            "markowitz_optimize": MarketTools.markowitz_optimize,
         }
