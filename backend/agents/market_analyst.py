@@ -65,7 +65,9 @@ class MarketAnalyst(BaseAgent):
                     f"  - 股息率: {financial.get('dividend_yield', 'N/A')}%\n"
                     f"  - 总市值: {financial.get('total_market_cap', 'N/A')} 港元\n"
                 )
-                thinking += f"ROE: {financial.get('roe', 'N/A')}% | 营收增长: {financial.get('revenue_growth', 'N/A')}%\n"
+                thinking += (
+                    f"ROE: {financial.get('roe', 'N/A')}% | 营收增长: {financial.get('revenue_growth', 'N/A')}%\n"
+                )
 
             valuation_info = ""
             if valuation and "error" not in valuation:

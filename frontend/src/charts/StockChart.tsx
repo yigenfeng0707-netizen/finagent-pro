@@ -1,5 +1,30 @@
 import React, { useEffect, useRef } from 'react';
-import * as echarts from 'echarts';
+import * as echarts from 'echarts/core';
+import { CanvasRenderer } from 'echarts/renderers';
+import { LineChart, BarChart } from 'echarts/charts';
+import {
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  GridComponent,
+  MarkLineComponent,
+  DataZoomComponent,
+  ToolboxComponent,
+} from 'echarts/components';
+import type { EChartsOption } from 'echarts';
+
+echarts.use([
+  CanvasRenderer,
+  LineChart,
+  BarChart,
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  GridComponent,
+  MarkLineComponent,
+  DataZoomComponent,
+  ToolboxComponent,
+]);
 
 interface StockChartProps {
   data: {
@@ -17,7 +42,7 @@ interface StockChartProps {
 
 const StockChart: React.FC<StockChartProps> = ({ data, title = '股票价格走势', height = 400, recommendation }) => {
   const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<echarts.ECharts | null>(null);
+  const chartInstance = useRef<ReturnType<typeof echarts.init> | null>(null);
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -29,7 +54,7 @@ const StockChart: React.FC<StockChartProps> = ({ data, title = '股票价格走�
 
     const currentPrice = data.prices[data.prices.length - 1];
 
-    const option: echarts.EChartsOption = {
+    const option: EChartsOption = {
       title: {
         text: title,
         left: 'center',
@@ -139,10 +164,17 @@ const StockChart: React.FC<StockChartProps> = ({ data, title = '股票价格走�
             color: '#5470c6'
           },
           areaStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: 'rgba(84, 112, 198, 0.3)' },
-              { offset: 1, color: 'rgba(84, 112, 198, 0.05)' }
-            ])
+            color: {
+              type: 'linear',
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: 'rgba(84, 112, 198, 0.3)' },
+                { offset: 1, color: 'rgba(84, 112, 198, 0.05)' }
+              ]
+            }
           },
           markLine: {
             silent: true,

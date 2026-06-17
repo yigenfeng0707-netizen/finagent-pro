@@ -1,5 +1,11 @@
 import React, { useRef, useEffect } from 'react';
-import * as echarts from 'echarts';
+import * as echarts from 'echarts/core';
+import { CanvasRenderer } from 'echarts/renderers';
+import { GraphChart } from 'echarts/charts';
+import { TooltipComponent } from 'echarts/components';
+
+
+echarts.use([CanvasRenderer, GraphChart, TooltipComponent]);
 
 interface DAGStep {
   name: string;
@@ -22,7 +28,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 const AgentDAGChart: React.FC<AgentDAGChartProps> = ({ steps, activeStep }) => {
   const chartRef = useRef<HTMLDivElement>(null);
-  const instanceRef = useRef<echarts.ECharts | null>(null);
+  const instanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
 
   useEffect(() => {
     if (!chartRef.current) return;

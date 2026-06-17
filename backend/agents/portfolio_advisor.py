@@ -2,7 +2,6 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 from models.schemas import AgentMessage, AgentRole, AgentStatus
-
 from tools.market_tools import MarketTools
 
 from .base_agent import BaseAgent

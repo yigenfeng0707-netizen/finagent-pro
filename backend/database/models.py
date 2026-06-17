@@ -1,14 +1,14 @@
 import uuid
 from datetime import datetime, timezone
 
-
-def _utc_now():
-    return datetime.now(timezone.utc)
-
 from database import Base
 from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
+
+
+def _utc_now():
+    return datetime.now(timezone.utc)
 
 
 class User(Base):

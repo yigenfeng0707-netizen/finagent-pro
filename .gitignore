@@ -11,6 +11,11 @@ backend/__pycache__/
 # Build outputs
 frontend/build/
 frontend/dist/
+
+# Playwright
+frontend/.playwright-browsers/
+frontend/test-results/
+frontend/playwright-report/
 *.egg-info/
 dist/
 build/
@@ -68,3 +73,5 @@ gen_*.js
 
 # Temp logs
 ci_log.txt
+backend/loadtest.db
+frontend/playwright/.cache/

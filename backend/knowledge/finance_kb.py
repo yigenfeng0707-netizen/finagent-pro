@@ -294,11 +294,13 @@ class FinanceKnowledgeBase:
             results = self.collection.get(limit=limit, offset=offset)
             items = []
             for i in range(len(results["ids"])):
-                items.append({
-                    "id": results["ids"][i],
-                    "content": results["documents"][i] if results["documents"] else "",
-                    "metadata": results["metadatas"][i] if results["metadatas"] else {},
-                })
+                items.append(
+                    {
+                        "id": results["ids"][i],
+                        "content": results["documents"][i] if results["documents"] else "",
+                        "metadata": results["metadatas"][i] if results["metadatas"] else {},
+                    }
+                )
             return {"total": count, "items": items, "limit": limit, "offset": offset}
         except Exception as e:
             return {"total": 0, "items": [], "error": str(e)}

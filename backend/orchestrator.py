@@ -3,7 +3,7 @@ import json
 import re
 import uuid
 from datetime import datetime
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Set
+from typing import AsyncIterator, Callable, Dict, List, Set
 
 from agents import MarketAnalyst, PortfolioAdvisor, RiskManager, SentimentScanner
 from knowledge.finance_kb import FinanceKnowledgeBase
@@ -125,8 +125,11 @@ class AgentOrchestrator:
         try:
             result = await asyncio.wait_for(
                 executor(
-                    symbols=symbols, market=market, context=context.results,
-                    investment_amount=investment_amount, risk_preference=risk_preference,
+                    symbols=symbols,
+                    market=market,
+                    context=context.results,
+                    investment_amount=investment_amount,
+                    risk_preference=risk_preference,
                 ),
                 timeout=timeout,
             )
@@ -159,24 +162,40 @@ class AgentOrchestrator:
     # ========== Agent 执行器 ==========
 
     async def _run_market_analyst(self, symbols: List[str], market: str, context: Dict, **kwargs) -> AgentMessage:
-        return await self.market_analyst.analyze(symbol=symbols[0] if symbols else "00700", market=market, context=context)
+        return await self.market_analyst.analyze(
+            symbol=symbols[0] if symbols else "00700", market=market, context=context
+        )
 
     async def _run_sentiment_scanner(self, symbols: List[str], market: str, context: Dict, **kwargs) -> AgentMessage:
-        return await self.sentiment_scanner.scan(symbol=symbols[0] if symbols else "00700", market=market, context=context)
+        return await self.sentiment_scanner.scan(
+            symbol=symbols[0] if symbols else "00700", market=market, context=context
+        )
 
     async def _run_risk_manager(self, symbols: List[str], market: str, context: Dict, **kwargs) -> AgentMessage:
         symbol_list = [{"symbol": s, "market": market, "weight": 1.0 / len(symbols)} for s in symbols]
         market_analysis = context.get("market_analysis")
         return await self.risk_manager.analyze(symbols=symbol_list, context=context, market_analysis=market_analysis)
 
-    async def _run_portfolio_advisor(self, symbols: List[str], market: str, context: Dict, investment_amount: float = 100000, risk_preference: str = "moderate", **kwargs) -> AgentMessage:
+    async def _run_portfolio_advisor(
+        self,
+        symbols: List[str],
+        market: str,
+        context: Dict,
+        investment_amount: float = 100000,
+        risk_preference: str = "moderate",
+        **kwargs,
+    ) -> AgentMessage:
         market_analysis = context.get("market_analysis")
         risk_analysis = context.get("risk_analysis")
         sentiment_analysis = context.get("sentiment_analysis")
         return await self.portfolio_advisor.advise(
-            risk_profile=risk_preference, investment_amount=investment_amount,
-            symbols=symbols, context=context,
-            market_analysis=market_analysis, risk_analysis=risk_analysis, sentiment_analysis=sentiment_analysis,
+            risk_profile=risk_preference,
+            investment_amount=investment_amount,
+            symbols=symbols,
+            context=context,
+            market_analysis=market_analysis,
+            risk_analysis=risk_analysis,
+            sentiment_analysis=sentiment_analysis,
         )
 
     # ========== 主执行流程 ==========
@@ -206,7 +225,9 @@ class AgentOrchestrator:
         kb_market = self.knowledge_base.get_context_for_query(f"港股 {symbols[0]} 市场分析 技术指标", n_results=2)
         kb_sentiment = self.knowledge_base.get_context_for_query("市场情绪 恐慌贪婪 投资心理", n_results=2)
         kb_risk = self.knowledge_base.get_context_for_query("风险管理 止损 VaR 波动率", n_results=2)
-        kb_portfolio = self.knowledge_base.get_context_for_query(f"资产配置 {risk_preference}型投资者 组合优化", n_results=2)
+        kb_portfolio = self.knowledge_base.get_context_for_query(
+            f"资产配置 {risk_preference}型投资者 组合优化", n_results=2
+        )
         context.results["_kb_market"] = kb_market
         context.results["_kb_sentiment"] = kb_sentiment
         context.results["_kb_risk"] = kb_risk
@@ -240,7 +261,9 @@ class AgentOrchestrator:
             for step in ready_steps:
                 running.add(step.step_id)
                 task = asyncio.create_task(
-                    self._collect_step_messages(step, context, session_id, symbols, market, investment_amount, risk_preference)
+                    self._collect_step_messages(
+                        step, context, session_id, symbols, market, investment_amount, risk_preference
+                    )
                 )
                 tasks.append(task)
                 step_queues[task] = step
@@ -273,8 +296,14 @@ class AgentOrchestrator:
         await self._notify(session_id, done_msg)
 
     async def _collect_step_messages(
-        self, step: TaskStep, context: AgentContext, session_id: str,
-        symbols: List[str], market: str, investment_amount: float, risk_preference: str,
+        self,
+        step: TaskStep,
+        context: AgentContext,
+        session_id: str,
+        symbols: List[str],
+        market: str,
+        investment_amount: float,
+        risk_preference: str,
     ) -> List[AgentMessage]:
         """执行步骤，收集并通知所有消息，返回消息列表"""
         messages: List[AgentMessage] = []
@@ -337,7 +366,7 @@ class AgentOrchestrator:
 
         if has_data:
             # 多因子评分模型
-            risk_score = 0.0   # 风险因子 (-1 到 +1)
+            risk_score = 0.0  # 风险因子 (-1 到 +1)
             momentum_score = 0.0  # 动量因子 (-1 到 +1)
             sentiment_score_val = 0.0  # 情绪因子 (-1 到 +1)
 
@@ -365,8 +394,7 @@ class AgentOrchestrator:
                 sharpe_factor = max(-1, min(1, (sharpe_ratio - 1.0) / 2.0))
 
             # 综合评分（加权）
-            composite = (risk_score * 0.30 + momentum_score * 0.25 +
-                         sentiment_score_val * 0.25 + sharpe_factor * 0.20)
+            composite = risk_score * 0.30 + momentum_score * 0.25 + sentiment_score_val * 0.25 + sharpe_factor * 0.20
 
             if composite > 0.2:
                 recommendation = "buy"
@@ -403,7 +431,7 @@ class AgentOrchestrator:
         base_report = self.synthesize_report(context)
 
         # 如果没有LLM可用，直接返回规则引擎结果
-        if not hasattr(self, 'market_analyst') or not self.market_analyst:
+        if not hasattr(self, "market_analyst") or not self.market_analyst:
             return base_report
 
         # 构建LLM综合推理Prompt
@@ -415,7 +443,9 @@ class AgentOrchestrator:
         if rm:
             agent_summaries.append(f"【风险经理报告】\n{rm.content[:400]}")
             if rm.data:
-                agent_summaries.append(f"  风险数据: {json.dumps({k: v for k, v in rm.data.items() if k in ['risk_level', 'risk_level_num', 'cvar_95', 'sharpe_ratio', 'annual_return', 'annual_volatility']}, ensure_ascii=False)}")
+                agent_summaries.append(
+                    f"  风险数据: {json.dumps({k: v for k, v in rm.data.items() if k in ['risk_level', 'risk_level_num', 'cvar_95', 'sharpe_ratio', 'annual_return', 'annual_volatility']}, ensure_ascii=False)}"
+                )
         if pa:
             agent_summaries.append(f"【组合顾问报告】\n{pa.content[:500]}")
 
@@ -436,11 +466,8 @@ class AgentOrchestrator:
 }}"""
 
         try:
-            import json
-            response = await asyncio.wait_for(
-                self.market_analyst.run_llm(prompt), timeout=30
-            )
-            json_match = re.search(r'\{[^}]+\}', response, re.DOTALL)
+            response = await asyncio.wait_for(self.market_analyst.run_llm(prompt), timeout=30)
+            json_match = re.search(r"\{[^}]+\}", response, re.DOTALL)
             if json_match:
                 result = json.loads(json_match.group())
                 base_report.recommendation = result.get("recommendation", base_report.recommendation)

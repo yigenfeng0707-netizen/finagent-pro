@@ -1,5 +1,11 @@
 import React, { useEffect, useRef } from 'react';
-import * as echarts from 'echarts';
+import * as echarts from 'echarts/core';
+import { CanvasRenderer } from 'echarts/renderers';
+import { PieChart } from 'echarts/charts';
+import { TitleComponent, TooltipComponent, LegendComponent } from 'echarts/components';
+import type { EChartsOption } from 'echarts';
+
+echarts.use([CanvasRenderer, PieChart, TitleComponent, TooltipComponent, LegendComponent]);
 
 interface PortfolioPieChartProps {
   data: {
@@ -19,7 +25,7 @@ const PortfolioPieChart: React.FC<PortfolioPieChartProps> = ({
   height = 350 
 }) => {
   const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<echarts.ECharts | null>(null);
+  const chartInstance = useRef<ReturnType<typeof echarts.init> | null>(null);
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -31,7 +37,7 @@ const PortfolioPieChart: React.FC<PortfolioPieChartProps> = ({
 
     const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272'];
 
-    const option: echarts.EChartsOption = {
+    const option: EChartsOption = {
       title: {
         text: title,
         left: 'center',

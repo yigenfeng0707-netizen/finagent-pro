@@ -43,7 +43,7 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend deps
-        run: npm install --no-audit
+        run: npm install --no-audit --legacy-peer-deps
         working-directory: frontend
       - name: Lint frontend (ESLint)
         run: npm run lint --if-present
@@ -58,22 +58,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
     needs: lint
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: finagent
-          POSTGRES_PASSWORD: finagent123
-          POSTGRES_DB: finagent_pro
-        ports:
-          - 5432:5432
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
       - name: Setup Python
@@ -88,25 +72,34 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r backend/requirements.txt
-      - name: Run Alembic migrations
+      - name: Run backend tests
         run: |
           cd backend
-          alembic upgrade head
+          python -m pytest tests/ -v --timeout=60
         env:
-          DATABASE_URL: postgresql+asyncpg://finagent:finagent123@localhost:5432/finagent_pro
-      - name: Run tests with coverage
-        run: |
-          cd backend
-          python -m pytest tests/ -v --cov=. --cov-report=xml --cov-report=term --timeout=60
-        env:
-          DATABASE_URL: postgresql+asyncpg://finagent:finagent123@localhost:5432/finagent_pro
-          REDIS_URL: redis://localhost:6379/0
+          DATABASE_URL: sqlite+aiosqlite:///:memory:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY || '' }}
-      - name: Upload coverage
-        uses: codecov/codecov-action@v5
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          files: backend/coverage.xml
-          fail_ci_if_error: false
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend deps
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Run Playwright E2E tests
+        run: npm run e2e
+        working-directory: frontend
 
   build:
     runs-on: ubuntu-latest

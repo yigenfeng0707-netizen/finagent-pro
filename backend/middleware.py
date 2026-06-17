@@ -3,7 +3,6 @@ import os
 import time
 import uuid
 from collections import defaultdict
-from typing import Callable
 
 from loguru import logger
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -258,6 +257,4 @@ class RequestTimingMiddleware:
         finally:
             duration_ms = round((time.time() - start) * 1000, 2)
             level = "warning" if status_code >= 500 else "info"
-            getattr(logger, level)(
-                f"{method} {path} {status_code} {duration_ms}ms request_id={request_id}"
-            )
+            getattr(logger, level)(f"{method} {path} {status_code} {duration_ms}ms request_id={request_id}")

@@ -6,26 +6,42 @@ from typing import Any, Dict, Optional
 
 from loguru import logger
 
-
 # 港股代码映射（用于回退和验证）
 HK_STOCK_ALIASES: Dict[str, str] = {
-    "腾讯": "00700", "腾讯控股": "00700", "tencent": "00700",
-    "阿里": "09988", "阿里巴巴": "09988", "alibaba": "09988",
-    "美团": "03690", "meituan": "03690",
-    "小米": "01810", "小米集团": "01810", "xiaomi": "01810",
-    "友邦": "01299", "友邦保险": "01299",
-    "平安": "02318", "中国平安": "02318",
-    "中海油": "00883", "中国海洋石油": "00883",
+    "腾讯": "00700",
+    "腾讯控股": "00700",
+    "tencent": "00700",
+    "阿里": "09988",
+    "阿里巴巴": "09988",
+    "alibaba": "09988",
+    "美团": "03690",
+    "meituan": "03690",
+    "小米": "01810",
+    "小米集团": "01810",
+    "xiaomi": "01810",
+    "友邦": "01299",
+    "友邦保险": "01299",
+    "平安": "02318",
+    "中国平安": "02318",
+    "中海油": "00883",
+    "中国海洋石油": "00883",
     "中国移动": "00941",
-    "汇丰": "00005", "汇丰控股": "00005", "hsbc": "00005",
-    "京东": "09618", "京东集团": "09618", "jd": "09618",
+    "汇丰": "00005",
+    "汇丰控股": "00005",
+    "hsbc": "00005",
+    "京东": "09618",
+    "京东集团": "09618",
+    "jd": "09618",
     "李宁": "02331",
     "紫金矿业": "02899",
     "中国联通": "00762",
 }
 
 RISK_ALIASES = {
-    "保守": "conservative", "稳健": "moderate", "进取": "aggressive", "激进": "aggressive",
+    "保守": "conservative",
+    "稳健": "moderate",
+    "进取": "aggressive",
+    "激进": "aggressive",
 }
 
 # 港股代码格式正则
@@ -104,14 +120,21 @@ async def parse_intent_with_llm(text: str, run_llm_func) -> Dict[str, Any]:
     try:
         response = await run_llm_func(prompt)
         # 提取JSON
-        json_match = re.search(r'\{[^}]+\}', response, re.DOTALL)
+        json_match = re.search(r"\{[^}]+\}", response, re.DOTALL)
         if json_match:
             result = json.loads(json_match.group())
             return result
     except Exception as e:
         logger.warning(f"LLM 意图解析失败: {e}")
 
-    return {"intent": "chat", "symbols": [], "risk_preference": None, "investment_amount": None, "market": "hk", "query_type": "general"}
+    return {
+        "intent": "chat",
+        "symbols": [],
+        "risk_preference": None,
+        "investment_amount": None,
+        "market": "hk",
+        "query_type": "general",
+    }
 
 
 async def parse_user_intent(text: str, run_llm_func=None) -> Dict[str, Any]:

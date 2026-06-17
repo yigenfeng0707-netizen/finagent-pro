@@ -1,5 +1,11 @@
 import React, { useEffect, useRef } from 'react';
-import * as echarts from 'echarts';
+import * as echarts from 'echarts/core';
+import { CanvasRenderer } from 'echarts/renderers';
+import { GaugeChart } from 'echarts/charts';
+import { TitleComponent } from 'echarts/components';
+import type { EChartsOption } from 'echarts';
+
+echarts.use([CanvasRenderer, GaugeChart, TitleComponent]);
 
 interface RiskGaugeProps {
   value: number; // 0-100
@@ -13,7 +19,7 @@ const RiskGauge: React.FC<RiskGaugeProps> = ({
   height = 300 
 }) => {
   const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<echarts.ECharts | null>(null);
+  const chartInstance = useRef<ReturnType<typeof echarts.init> | null>(null);
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -41,7 +47,7 @@ const RiskGauge: React.FC<RiskGaugeProps> = ({
       color = '#d93025';
     }
 
-    const option: echarts.EChartsOption = {
+    const option: EChartsOption = {
       title: {
         text: title,
         left: 'center',

@@ -156,14 +156,16 @@ async def health_check():
     except Exception:
         db_ok = False
 
-    try:
-        import redis.asyncio as aioredis
+    redis_url = os.getenv("REDIS_URL", "")
+    if redis_url:
+        try:
+            import redis.asyncio as aioredis
 
-        r = await aioredis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"), socket_connect_timeout=2)
-        await r.ping()
-        await r.aclose()
-    except Exception:
-        redis_ok = False
+            r = await aioredis.from_url(redis_url, socket_connect_timeout=1)
+            await r.ping()
+            await r.aclose()
+        except Exception:
+            redis_ok = False
 
     return {
         "status": "healthy" if db_ok else "degraded",
@@ -265,7 +267,11 @@ async def chat(request: ChatRequest, auth=Depends(optional_auth)):
 
         try:
             async for agent_msg in orchestrator.run(
-                symbols=symbols, investment_amount=investment_amount, risk_preference=risk_pref, market="hk", session_id=session_id
+                symbols=symbols,
+                investment_amount=investment_amount,
+                risk_preference=risk_pref,
+                market="hk",
+                session_id=session_id,
             ):
                 agent_messages.append(agent_msg)
         finally:
@@ -273,7 +279,9 @@ async def chat(request: ChatRequest, auth=Depends(optional_auth)):
 
         from types import SimpleNamespace
 
-        req_obj = SimpleNamespace(symbols=symbols, risk_preference=risk_pref, investment_amount=investment_amount, market="hk")
+        req_obj = SimpleNamespace(
+            symbols=symbols, risk_preference=risk_pref, investment_amount=investment_amount, market="hk"
+        )
         ctx = _build_sync_context(agent_messages, req_obj)
         report = await orchestrator.synthesize_report_with_llm(ctx)
         await ws_manager.broadcast_final(session_id, report.model_dump())
@@ -292,9 +300,11 @@ async def chat_stream(request: ChatRequest, auth=Depends(optional_auth)):
     intent = await parse_user_intent(request.message, run_llm_func=orchestrator.market_analyst.run_llm)
 
     if intent["intent"] == "chat" or not intent["symbols"]:
+
         async def simple_stream():
             yield f"data: {json.dumps({'type': 'text', 'content': '您好！我是FinAgent Pro智能投顾助手。请告诉我您想分析哪只港股？'}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+
         return StreamingResponse(simple_stream(), media_type="text/event-stream")
 
     symbols = intent["symbols"]
@@ -315,15 +325,19 @@ async def chat_stream(request: ChatRequest, auth=Depends(optional_auth)):
         orchestrator.on_progress(session_id, on_message)
         try:
             async for agent_msg in orchestrator.run(
-                symbols=symbols, investment_amount=investment_amount, risk_preference=risk_pref, market="hk", session_id=session_id
+                symbols=symbols,
+                investment_amount=investment_amount,
+                risk_preference=risk_pref,
+                market="hk",
+                session_id=session_id,
             ):
                 agent_messages.append(agent_msg)
                 msg_data = {
                     "type": "agent_progress",
                     "agent": agent_msg.agent,
-                    "role": agent_msg.role.value if hasattr(agent_msg.role, 'value') else str(agent_msg.role),
+                    "role": agent_msg.role.value if hasattr(agent_msg.role, "value") else str(agent_msg.role),
                     "content": agent_msg.content,
-                    "status": agent_msg.status.value if hasattr(agent_msg.status, 'value') else str(agent_msg.status),
+                    "status": agent_msg.status.value if hasattr(agent_msg.status, "value") else str(agent_msg.status),
                     "timestamp": agent_msg.timestamp,
                 }
                 yield f"data: {json.dumps(msg_data, ensure_ascii=False)}\n\n"
@@ -332,7 +346,10 @@ async def chat_stream(request: ChatRequest, auth=Depends(optional_auth)):
 
         # 生成最终综合报告
         from types import SimpleNamespace
-        req_obj = SimpleNamespace(symbols=symbols, risk_preference=risk_pref, investment_amount=investment_amount, market="hk")
+
+        req_obj = SimpleNamespace(
+            symbols=symbols, risk_preference=risk_pref, investment_amount=investment_amount, market="hk"
+        )
         ctx = _build_sync_context(agent_messages, req_obj)
         report = await orchestrator.synthesize_report_with_llm(ctx)
 
@@ -497,6 +514,7 @@ async def esg_analyze(symbol: str, market: str = "hk", auth=Depends(optional_aut
     """ESG分析（Phase 2 — 当前为骨架实现）"""
     try:
         from agents.esg_analyst import ESGAnalyst
+
         esg_agent = ESGAnalyst()
         result = await esg_agent.analyze(symbol=symbol, market=market)
         return {"success": True, "data": result.data, "analysis": result.content}

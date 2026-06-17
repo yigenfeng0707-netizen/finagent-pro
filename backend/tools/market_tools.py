@@ -281,7 +281,9 @@ class MarketTools:
             if not stock_returns:
                 return {"error": "无法获取数据执行压力测试"}
 
-            weights = np.array([item.get("weight", 1.0 / len(symbols)) for item in symbols if item["symbol"] in stock_returns])
+            weights = np.array(
+                [item.get("weight", 1.0 / len(symbols)) for item in symbols if item["symbol"] in stock_returns]
+            )
             weights = weights / weights.sum()
 
             # 计算协方差矩阵和相关性矩阵
@@ -323,16 +325,20 @@ class MarketTools:
 
                 # 恢复时间估计（基于历史均值回归速度）
                 mean_daily_return = float(returns_df.mean().mean())
-                recovery_days = int(abs(diversified_loss) / (mean_daily_return * 100) * 1.5) if mean_daily_return > 0 else 999
+                recovery_days = (
+                    int(abs(diversified_loss) / (mean_daily_return * 100) * 1.5) if mean_daily_return > 0 else 999
+                )
 
-                results.append({
-                    "scenario": scenario["name"],
-                    "shock_pct": f"{shock * 100:.0f}%",
-                    "portfolio_loss_pct": round(diversified_loss * 100, 2),
-                    "diversification_adjustment": round((1 - diversification_factor) * 100, 2),
-                    "recovery_days_est": min(recovery_days, 999),
-                    "stress_correlation": round(stress_corr, 3),
-                })
+                results.append(
+                    {
+                        "scenario": scenario["name"],
+                        "shock_pct": f"{shock * 100:.0f}%",
+                        "portfolio_loss_pct": round(diversified_loss * 100, 2),
+                        "diversification_adjustment": round((1 - diversification_factor) * 100, 2),
+                        "recovery_days_est": min(recovery_days, 999),
+                        "stress_correlation": round(stress_corr, 3),
+                    }
+                )
 
             return {
                 "stress_test_results": results,
@@ -395,14 +401,26 @@ class MarketTools:
             init_w = np.ones(n_assets) / n_assets
 
             # 最大夏普比率组合
-            opt_sharpe = minimize(neg_sharpe, init_w, method="SLSQP", bounds=bounds, constraints=constraints,
-                                  options={"ftol": 1e-10, "maxiter": 500})
+            opt_sharpe = minimize(
+                neg_sharpe,
+                init_w,
+                method="SLSQP",
+                bounds=bounds,
+                constraints=constraints,
+                options={"ftol": 1e-10, "maxiter": 500},
+            )
             w_sharpe = opt_sharpe.x if opt_sharpe.success else init_w
             w_sharpe = w_sharpe / w_sharpe.sum()
 
             # 最小波动率组合
-            opt_vol = minimize(portfolio_volatility, init_w, method="SLSQP", bounds=bounds, constraints=constraints,
-                               options={"ftol": 1e-10, "maxiter": 500})
+            opt_vol = minimize(
+                portfolio_volatility,
+                init_w,
+                method="SLSQP",
+                bounds=bounds,
+                constraints=constraints,
+                options={"ftol": 1e-10, "maxiter": 500},
+            )
             w_minvol = opt_vol.x if opt_vol.success else init_w
             w_minvol = w_minvol / w_minvol.sum()
 
@@ -488,16 +506,19 @@ class MarketTools:
                 row = df_zd[df_zd["股票代码"] == code]
                 if not row.empty:
                     r = row.iloc[0]
+
                     def _parse_score(val):
                         try:
                             return float(str(val).split("(")[0])
                         except (ValueError, IndexError):
                             return 0.0
+
                     def _parse_grade(val):
                         try:
                             return str(val).split("(")[1].rstrip(")")
-                        except (IndexError):
+                        except IndexError:
                             return str(val)
+
                     esg_val = r.get("ESG评分", "")
                     result["sources"]["shangdao_ronglv"] = {
                         "overall_score": _parse_score(esg_val),
@@ -614,13 +635,15 @@ class MarketTools:
                 return {"error": f"未找到 {symbol} 的分红历史"}
             records = []
             for _, row in df.head(10).iterrows():
-                records.append({
-                    "fiscal_year": str(row.get("财政年度", "")),
-                    "dividend_plan": str(row.get("分红方案", "")),
-                    "type": str(row.get("分配类型", "")),
-                    "ex_dividend_date": str(row.get("除净日", "")),
-                    "payment_date": str(row.get("发放日", "")),
-                })
+                records.append(
+                    {
+                        "fiscal_year": str(row.get("财政年度", "")),
+                        "dividend_plan": str(row.get("分红方案", "")),
+                        "type": str(row.get("分配类型", "")),
+                        "ex_dividend_date": str(row.get("除净日", "")),
+                        "payment_date": str(row.get("发放日", "")),
+                    }
+                )
             return {
                 "symbol": symbol,
                 "dividend_count": len(df),
@@ -696,13 +719,15 @@ class MarketTools:
                 return {"error": "无法获取港股热度排名"}
             records = []
             for _, row in df.head(top_n).iterrows():
-                records.append({
-                    "rank": int(row.get("当前排名", 0)),
-                    "symbol": str(row.get("代码", "")),
-                    "name": str(row.get("股票名称", "")),
-                    "price": float(row.get("最新价", 0)),
-                    "change_pct": float(row.get("涨跌幅", 0)),
-                })
+                records.append(
+                    {
+                        "rank": int(row.get("当前排名", 0)),
+                        "symbol": str(row.get("代码", "")),
+                        "name": str(row.get("股票名称", "")),
+                        "price": float(row.get("最新价", 0)),
+                        "change_pct": float(row.get("涨跌幅", 0)),
+                    }
+                )
             return {
                 "hot_stocks": records,
                 "total_count": len(df),

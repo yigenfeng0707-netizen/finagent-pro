@@ -78,7 +78,7 @@ const AgentChatPage: React.FC = () => {
               onPressEnter={handleSendChat}
               disabled={chatLoading}
             />
-            <Button type="primary" icon={<SendOutlined />} onClick={handleSendChat} loading={chatLoading} />
+            <Button type="primary" icon={<SendOutlined />} aria-label="发送" onClick={handleSendChat} loading={chatLoading} />
           </div>
         </Card>
       </Col>

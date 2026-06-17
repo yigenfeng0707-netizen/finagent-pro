@@ -71,17 +71,20 @@ class ESGAnalyst(BaseAgent):
             if row.empty:
                 return None
             r = row.iloc[0]
+
             # 解析 "71.95(AA)" 格式
             def parse_score(val):
                 try:
                     return float(str(val).split("(")[0])
                 except (ValueError, IndexError):
                     return 0.0
+
             def parse_grade(val):
                 try:
                     return str(val).split("(")[1].rstrip(")")
-                except (IndexError):
+                except IndexError:
                     return str(val)
+
             esg_val = r.get("ESG评分", "")
             return {
                 "overall_score": parse_score(esg_val),
