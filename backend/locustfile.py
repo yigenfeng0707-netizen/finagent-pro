@@ -20,7 +20,7 @@ class SmokeUser(HttpUser):
         )
         resp = self.client.post(
             "/api/auth/login",
-            data={"username": f"locust_{self.uid}@example.com", "password": "Locust1234"},
+            json={"email": f"locust_{self.uid}@example.com", "password": "Locust1234"},
         )
         self.token = resp.json().get("access_token") if resp.status_code == 200 else None
 

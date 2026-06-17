@@ -75,3 +75,5 @@ gen_*.js
 ci_log.txt
 backend/loadtest.db
 frontend/playwright/.cache/
+temp-gh-push.js
+temp-*.js
