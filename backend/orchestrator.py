@@ -234,22 +234,31 @@ class AgentOrchestrator:
             if not ready_steps and not running:
                 break  # 所有步骤完成或无法继续
 
-            # 并行启动所有就绪步骤
+            # 并行启动所有就绪步骤并实时转发消息
             tasks = []
+            step_queues: Dict[asyncio.Task, TaskStep] = {}
             for step in ready_steps:
                 running.add(step.step_id)
-                tasks.append(self._execute_step_with_notifications(step, context, session_id, symbols, market, investment_amount, risk_preference))
+                task = asyncio.create_task(
+                    self._collect_step_messages(step, context, session_id, symbols, market, investment_amount, risk_preference)
+                )
+                tasks.append(task)
+                step_queues[task] = step
 
             if tasks:
                 results = await asyncio.gather(*tasks, return_exceptions=True)
-                for i, result in enumerate(results):
-                    step = ready_steps[i]
+                for task, result in zip(tasks, results):
+                    step = step_queues[task]
                     running.discard(step.step_id)
                     if isinstance(result, Exception):
                         logger.error(f"步骤 {step.step_id} 异常: {result}")
                         failed_msg = self._make_failed_message(step.agent_role, str(result))
                         context.results[step.output_key] = failed_msg
-                    # 成功的结果已在 _execute_step_with_notifications 中写入 context
+                        yield failed_msg
+                    elif isinstance(result, list):
+                        # 转发该步骤产生的所有消息
+                        for msg in result:
+                            yield msg
                     completed.add(step.step_id)
 
         # 发送完成消息
@@ -263,13 +272,16 @@ class AgentOrchestrator:
         yield done_msg
         await self._notify(session_id, done_msg)
 
-    async def _execute_step_with_notifications(
+    async def _collect_step_messages(
         self, step: TaskStep, context: AgentContext, session_id: str,
         symbols: List[str], market: str, investment_amount: float, risk_preference: str,
-    ) -> None:
-        """执行步骤并通知进度，将所有 yield 的消息通过 _notify 发送"""
+    ) -> List[AgentMessage]:
+        """执行步骤，收集并通知所有消息，返回消息列表"""
+        messages: List[AgentMessage] = []
         async for msg in self._run_step(step, context, session_id, symbols, market, investment_amount, risk_preference):
+            messages.append(msg)
             await self._notify(session_id, msg)
+        return messages
 
     def synthesize_report(self, context: AgentContext) -> FinalReport:
         """综合4个Agent输出，生成最终投资建议报告（规则引擎快速综合）"""

@@ -20,10 +20,10 @@ export function useAnalysis() {
   // 订阅 store 状态
   const {
     selectedStock, investmentAmount, riskPreference,
-    sessionId, loading, wsConnected, authToken,
+    sessionId, loading, authToken,
     setSessionId, setLoading, setAnalysisResult, setAnalysisMetrics,
     setAnalysisProgress, setFeedMessages, setThinkingSteps,
-    setWorkbenchSteps, setToolCalls, setLiveContext, resetAnalysis,
+    setWorkbenchSteps, setToolCalls, setLiveContext,
   } = useAppStore();
 
   // 保持 ref 同步

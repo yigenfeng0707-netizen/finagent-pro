@@ -4,7 +4,6 @@ import { SendOutlined } from '@ant-design/icons';
 import LiveAgentFeed from './LiveAgentFeed';
 import AgentThinkingPanel from './AgentThinkingPanel';
 import { useAppStore } from '../stores/appStore';
-import { useAnalysis } from '../hooks/useAnalysis';
 import { API_BASE } from '../constants';
 import { useState } from 'react';
 

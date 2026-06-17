@@ -36,6 +36,9 @@ backend/memory_store/
 backend/cache/
 backend/chroma_db/
 
+# Generated media/deliverables
+output/
+
 # Temporary files
 *.log
 *.tmp

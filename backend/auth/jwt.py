@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
 import jwt
@@ -37,8 +37,8 @@ def create_access_token(user_id: uuid.UUID, role: str = "user") -> str:
         "sub": str(user_id),
         "role": role,
         "type": "access",
-        "iat": datetime.utcnow(),
-        "exp": datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS),
+        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS),
         "jti": str(uuid.uuid4()),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -48,8 +48,8 @@ def create_refresh_token(user_id: uuid.UUID) -> str:
     payload = {
         "sub": str(user_id),
         "type": "refresh",
-        "iat": datetime.utcnow(),
-        "exp": datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
         "jti": str(uuid.uuid4()),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)

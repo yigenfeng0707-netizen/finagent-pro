@@ -1,20 +1,28 @@
-import React, { useEffect } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Menu, ConfigProvider, theme, Switch, Tag } from 'antd';
+import { Layout, Menu, ConfigProvider, theme, Switch, Tag, Spin } from 'antd';
 import {
   DashboardOutlined, LineChartOutlined, PieChartOutlined, SafetyOutlined,
   RobotOutlined, SettingOutlined, ApiOutlined, SunOutlined, MoonOutlined,
 } from '@ant-design/icons';
 import { useAppStore } from './stores/appStore';
 import { useAnalysis } from './hooks/useAnalysis';
-import DashboardPage from './components/DashboardPage';
-import AgentChatPage from './components/AgentChatPage';
-import StockListPage from './components/StockListPage';
-import OrchestratorWorkbench from './components/OrchestratorWorkbench';
-import PortfolioPage from './pages/PortfolioPage';
-import RiskPage from './pages/RiskPage';
-import SettingsPage from './pages/SettingsPage';
 import './App.css';
+
+// 按路由代码分割，减少首屏 bundle 体积
+const DashboardPage = React.lazy(() => import('./components/DashboardPage'));
+const AgentChatPage = React.lazy(() => import('./components/AgentChatPage'));
+const StockListPage = React.lazy(() => import('./components/StockListPage'));
+const OrchestratorWorkbench = React.lazy(() => import('./components/OrchestratorWorkbench'));
+const PortfolioPage = React.lazy(() => import('./pages/PortfolioPage'));
+const RiskPage = React.lazy(() => import('./pages/RiskPage'));
+const SettingsPage = React.lazy(() => import('./pages/SettingsPage'));
+
+const PageLoader: React.FC = () => (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 240 }}>
+    <Spin size="large" tip="加载中..." />
+  </div>
+);
 
 const { Header, Sider, Content } = Layout;
 
@@ -97,15 +105,17 @@ const AppLayout: React.FC = () => {
             background: darkMode ? '#1f1f1f' : '#f0f2f5',
             minHeight: 280,
           }}>
-            <Routes>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/stocks" element={<StockListPageWrapper />} />
-              <Route path="/agents" element={<AgentChatPage />} />
-              <Route path="/workbench" element={<OrchestratorWorkbenchWrapper />} />
-              <Route path="/portfolio" element={<PortfolioPage />} />
-              <Route path="/risk" element={<RiskPage />} />
-              <Route path="/settings" element={<SettingsPage wsConnected={wsConnected} />} />
-            </Routes>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/" element={<DashboardPage />} />
+                <Route path="/stocks" element={<StockListPageWrapper />} />
+                <Route path="/agents" element={<AgentChatPage />} />
+                <Route path="/workbench" element={<OrchestratorWorkbenchWrapper />} />
+                <Route path="/portfolio" element={<PortfolioPage />} />
+                <Route path="/risk" element={<RiskPage />} />
+                <Route path="/settings" element={<SettingsPage wsConnected={wsConnected} />} />
+              </Routes>
+            </Suspense>
           </Content>
         </Layout>
       </Layout>

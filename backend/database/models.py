@@ -1,5 +1,9 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utc_now():
+    return datetime.now(timezone.utc)
 
 from database import Base
 from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text
@@ -20,8 +24,8 @@ class User(Base):
     role = Column(String(20), default="user")  # user, admin
     plan = Column(String(20), default="free")  # free, pro, enterprise
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now)
     last_login_at = Column(DateTime, nullable=True)
 
     sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
@@ -38,7 +42,7 @@ class Session(Base):
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(String(500), nullable=True)
     expires_at = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
     revoked = Column(Boolean, default=False)
 
     user = relationship("User", back_populates="sessions")
@@ -56,7 +60,7 @@ class AnalysisRecord(Base):
     error_message = Column(Text, nullable=True)
     llm_tokens_used = Column(Integer, default=0)
     duration_ms = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
     completed_at = Column(DateTime, nullable=True)
 
     user = relationship("User", back_populates="analysis_records")
@@ -75,8 +79,8 @@ class Subscription(Base):
     current_period_end = Column(DateTime, nullable=False)
     canceled_at = Column(DateTime, nullable=True)
     stripe_subscription_id = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now)
 
 
 class AuditLog(Base):
@@ -90,7 +94,7 @@ class AuditLog(Base):
     detail = Column(JSON, nullable=True)
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(String(500), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
 
 
 class ApiUsage(Base):
@@ -103,4 +107,4 @@ class ApiUsage(Base):
     status_code = Column(Integer, nullable=False)
     duration_ms = Column(Integer, nullable=True)
     tokens_used = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)

@@ -3,6 +3,7 @@ import os
 import time
 import uuid
 from collections import defaultdict
+from typing import Callable
 
 from loguru import logger
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -224,3 +225,39 @@ class RateLimitMiddleware:
             await send(message)
 
         await self.app(scope, receive, send_wrapper)
+
+
+class RequestTimingMiddleware:
+    """记录请求耗时与状态码，便于生产环境可观测性排查。"""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        start = time.time()
+        request_id = _get_header_value(scope, "x-request-id") or str(uuid.uuid4())[:12]
+        path = _get_path(scope)
+        method = scope.get("method", "")
+        status_code = 0
+
+        async def send_wrapper(message):
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message.get("status", 0)
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        except Exception:
+            status_code = 500
+            raise
+        finally:
+            duration_ms = round((time.time() - start) * 1000, 2)
+            level = "warning" if status_code >= 500 else "info"
+            getattr(logger, level)(
+                f"{method} {path} {status_code} {duration_ms}ms request_id={request_id}"
+            )

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Row, Col, Tabs, List, Tag, Button } from 'antd';
+import { Card, Row, Col, Tabs, List, Button } from 'antd';
 import { PieChartOutlined, FilePdfOutlined } from '@ant-design/icons';
 import { useAppStore } from '../stores/appStore';
 import { useAnalysis } from '../hooks/useAnalysis';

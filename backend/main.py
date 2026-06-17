@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from knowledge.finance_kb import FinanceKnowledgeBase
 from loguru import logger
-from middleware import RateLimitMiddleware
+from middleware import RateLimitMiddleware, RequestTimingMiddleware
 from models.schemas import (
     ChatRequest,
     OrchestratorRequest,
@@ -64,6 +64,7 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url="/docs" if ENV != "production" else None,
     redoc_url="/redoc" if ENV != "production" else None,
+    openapi_url="/openapi.json" if ENV != "production" else None,
 )
 
 app.add_middleware(
@@ -76,6 +77,7 @@ app.add_middleware(
 )
 
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(RequestTimingMiddleware)
 
 app.include_router(auth_router)
 setup_exception_handlers(app)

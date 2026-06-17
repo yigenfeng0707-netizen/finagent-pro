@@ -4,7 +4,7 @@ Pytest configuration with async fixtures for FastAPI + SQLAlchemy async.
 
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import AsyncGenerator
 
 import pytest
@@ -16,14 +16,21 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
-    os.getenv("DATABASE_URL", "postgresql+asyncpg://finagent:finagent_dev@localhost:5432/finagent_pro_test"),
+    os.getenv("DATABASE_URL", "sqlite+aiosqlite:///:memory:"),
 )
 
 
 @pytest.fixture
 async def test_engine():
-    """Function-scoped engine to ensure each test gets its own event loop + DB connections."""
-    engine = create_async_engine(TEST_DATABASE_URL, echo=False, pool_size=5, pool_pre_ping=True)
+    """Function-scoped engine to ensure each test gets its own event loop + DB connections.
+
+    默认使用 sqlite+aiosqlite 内存数据库运行测试，无需本地 PostgreSQL。
+    生产环境可通过 TEST_DATABASE_URL 环境变量覆盖。
+    """
+    engine_kwargs = {"echo": False, "pool_pre_ping": True}
+    if TEST_DATABASE_URL.startswith("postgresql"):
+        engine_kwargs["pool_size"] = 5
+    engine = create_async_engine(TEST_DATABASE_URL, **engine_kwargs)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield engine
@@ -48,7 +55,7 @@ async def test_user(db_session: AsyncSession) -> User:
         username=f"testuser_{uid}",
         hashed_password=hash_password("Test1234!"),
         email_verified=True,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     db_session.add(user)
     await db_session.commit()

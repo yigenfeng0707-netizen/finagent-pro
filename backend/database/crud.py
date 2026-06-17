@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from database.models import AnalysisRecord, ApiUsage, AuditLog, Session, User
@@ -39,7 +39,7 @@ async def create_user(db: AsyncSession, email: str, username: str, hashed_passwo
 
 
 async def update_user_login(db: AsyncSession, user_id: uuid.UUID):
-    await db.execute(User.__table__.update().where(User.id == user_id).values(last_login_at=datetime.utcnow()))
+    await db.execute(User.__table__.update().where(User.id == user_id).values(last_login_at=datetime.now(timezone.utc)))
     await db.commit()
 
 
@@ -62,7 +62,7 @@ async def create_session(
         refresh_token=refresh_token,
         ip_address=ip,
         user_agent=ua,
-        expires_at=datetime.utcnow() + timedelta(hours=hours),
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=hours),
     )
     db.add(sess)
     await db.commit()
@@ -73,7 +73,7 @@ async def get_session_by_access_token(db: AsyncSession, token: str) -> Optional[
     result = await db.execute(
         select(Session)
         .options(selectinload(Session.user))
-        .where(Session.access_token == token, ~Session.revoked, Session.expires_at > datetime.utcnow())
+        .where(Session.access_token == token, ~Session.revoked, Session.expires_at > datetime.now(timezone.utc))
     )
     return result.scalar_one_or_none()
 
@@ -144,7 +144,7 @@ async def record_api_usage(
 
 async def get_user_usage_stats(db: AsyncSession, user_id: uuid.UUID, since: datetime = None) -> Dict:
     if since is None:
-        since = datetime.utcnow() - timedelta(days=30)
+        since = datetime.now(timezone.utc) - timedelta(days=30)
     result = await db.execute(
         select(
             func.count(ApiUsage.id).label("total_requests"),
