@@ -1,0 +1,25 @@
+flowchart TB
+    Request["用户请求：分析腾讯控股"] --> Intent["Orchestrator 意图识别"]
+    Intent --> Plan["任务规划"]
+
+    Plan --> Step1["Step 1 市场分析师"]
+    Plan --> Step2["Step 2 情绪扫描器"]
+
+    Step1 -->|current_price<br/>MA5/MA20/RSI<br/>PE/PB| Step3["Step 3 风险经理"]
+    Step2 -->|fear_greed_index<br/>fund_flow| Step3
+
+    Step3 -->|VaR CVaR<br/>Sharpe 压力测试| Step4["Step 4 组合顾问"]
+
+    Step4 -->|马科维茨最优配置| Report["最终报告生成"]
+    Report --> Push["WebSocket 推送到前端"]
+
+    subgraph Parallel["并行执行"]
+        direction LR
+        Step1
+        Step2
+    end
+
+    style Parallel fill:#e3f2fd
+    style Step3 fill:#fff8e1
+    style Step4 fill:#f3e5f5
+    style Report fill:#e8f5e9

@@ -1,0 +1,46 @@
+graph TB
+    subgraph Frontend["前端层"]
+        Browser["用户浏览器"]
+        React["React 18 + Vite + Ant Design 5"]
+    end
+
+    subgraph Gateway["网关层"]
+        Nginx["Nginx 反向代理<br/>安全头 + gzip"]
+    end
+
+    subgraph Backend["后端服务层"]
+        FastAPI["FastAPI + Agent Orchestrator"]
+        Agent1["市场分析师 Agent"]
+        Agent2["情绪扫描器 Agent"]
+        Agent3["风险经理 Agent"]
+        Agent4["组合顾问 Agent"]
+        Tools["8 个金融专业工具"]
+        RAG["RAG 知识库<br/>ChromaDB"]
+    end
+
+    subgraph DataLayer["数据/模型层"]
+        Redis["Redis 缓存"]
+        Postgres["PostgreSQL"]
+        LLM["DeepSeek / GLM-4"]
+    end
+
+    Browser -->|HTTP/WebSocket| Nginx
+    Nginx -->|API 代理| FastAPI
+    React -->|WebSocket 实时推送| Browser
+    FastAPI --> Agent1
+    FastAPI --> Agent2
+    FastAPI --> Agent3
+    FastAPI --> Agent4
+    Agent1 --> Tools
+    Agent2 --> Tools
+    Agent3 --> Tools
+    Agent4 --> Tools
+    FastAPI --> RAG
+    FastAPI --> Redis
+    FastAPI --> Postgres
+    FastAPI --> LLM
+
+    style Frontend fill:#e1f5fe
+    style Gateway fill:#fff3e0
+    style Backend fill:#e8f5e9
+    style DataLayer fill:#fce4ec

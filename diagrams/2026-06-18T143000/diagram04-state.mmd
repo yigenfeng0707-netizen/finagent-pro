@@ -1,0 +1,15 @@
+stateDiagram-v2
+    [*] --> PENDING: 提交任务
+    PENDING --> RUNNING: 依赖完成
+    RUNNING --> COMPLETED: 执行成功
+    RUNNING --> FAILED: 执行失败/超时 90s
+    COMPLETED --> [*]
+    FAILED --> [*]: 降级消息
+    FAILED --> PENDING: 重试
+
+    note right of PENDING
+        等待前序 Agent 输出
+    end note
+    note right of RUNNING
+        调用工具与 LLM 推理
+    end note

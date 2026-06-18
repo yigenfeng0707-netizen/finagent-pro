@@ -1,0 +1,35 @@
+flowchart TB
+    subgraph Input["输入阶段"]
+        direction LR
+        A([开始]) --> B[访问首页]
+        B --> C[选择股票]
+        C --> D[输入金额]
+        D --> E[选择风险偏好]
+    end
+
+    subgraph Analysis["AI 分析阶段"]
+        direction LR
+        E --> F[启动 AI 分析]
+        F --> G{意图识别}
+        G -->|失败| H[提示重新输入]
+        H --> E
+        G -->|成功| I[WebSocket 连接]
+        I --> J[DAG 编排器]
+        J --> K[市场/情绪并行]
+        K --> L[风险经理]
+        L --> M[组合顾问]
+    end
+
+    subgraph Output["输出阶段"]
+        direction LR
+        M --> N[生成最终报告]
+        N --> O[前端展示]
+        O --> P[导出 PDF]
+        P --> Q([结束])
+    end
+
+    style A fill:#e8f5e9
+    style Q fill:#ffebee
+    style Input fill:#e3f2fd
+    style Analysis fill:#fff8e1
+    style Output fill:#e8f5e9
