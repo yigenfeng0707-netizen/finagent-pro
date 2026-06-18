@@ -305,7 +305,7 @@ finagent-pro/
 ├── Dockerfile.backend           # 后端镜像 (非root用户)
 ├── Dockerfile.frontend          # 前端多阶段构建
 ├── nginx.conf                   # 反向代理 (安全头+gzip)
-├── docs/ADR.md                  # 架构决策记录 (7项)
+├── docs/ADR.md                  # 架构决策记录 (10项)
 ├── LICENSE                      # MIT
 └── README.md
 ```
