@@ -436,12 +436,9 @@ async def get_stock_history(symbol: str, market: str = "hk", days: int = 180):
 
 @app.get("/api/market/hk-spot")
 async def get_hk_spot():
-    """港股实时行情"""
+    """港股实时行情（带 mock 降级）"""
     try:
-        import akshare as ak
-
-        df = await asyncio.to_thread(ak.stock_hk_spot_em)
-        stocks = df.head(20).to_dict(orient="records")
+        stocks = await asyncio.to_thread(market_service.get_hk_spot, 20)
         return {"success": True, "data": stocks}
     except Exception as e:
         raise DataFetchError("hk_spot", str(e))

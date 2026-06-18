@@ -53,7 +53,7 @@ class MarketDataService:
     _cache = RedisCache()
 
     def __init__(self):
-        self.cache_dir = "./cache"
+        self.cache_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cache")
         os.makedirs(self.cache_dir, exist_ok=True)
 
     def _get_cache_path(self, symbol: str, market: str) -> str:
@@ -158,6 +158,35 @@ class MarketDataService:
 
         return df
 
+    def _generate_mock_history(self, symbol: str, market: str = "hk", days: int = 180) -> pd.DataFrame:
+        """生成 mock 历史行情数据（数据源不可用时用于演示）"""
+        import numpy as np
+
+        mock = self._HK_MOCK_DATA.get(symbol)
+        base_price = mock["price"] if mock else 100.0
+        name = mock["name"] if mock else self._get_stock_name(symbol, market)
+
+        np.random.seed(hash(symbol) % 2**31)
+        dates = pd.date_range(end=datetime.now(), periods=days, freq="B")
+        returns = np.random.normal(0.0005, 0.016, days)
+        prices = base_price * np.exp(np.cumsum(returns))
+        # Ensure the last close matches the mock current price
+        prices = prices / prices[-1] * base_price
+
+        df = pd.DataFrame({
+            "日期": dates.strftime("%Y-%m-%d"),
+            "开盘": prices * (1 + np.random.normal(0, 0.005, days)),
+            "收盘": prices,
+            "最高": prices * (1 + np.abs(np.random.normal(0, 0.008, days))),
+            "最低": prices * (1 - np.abs(np.random.normal(0, 0.008, days))),
+            "成交量": np.random.randint(1_000_000, 50_000_000, days, dtype=np.int64),
+            "成交额": np.random.randint(10_000_000, 5_000_000_000, days, dtype=np.int64),
+        })
+        # Ensure OHLC consistency
+        df["最高"] = df[["开盘", "收盘", "最高"]].max(axis=1)
+        df["最低"] = df[["开盘", "收盘", "最低"]].min(axis=1)
+        return df
+
     def get_stock_info(self, symbol: str, market: str = "hk") -> Dict[str, Any]:
         """
         获取股票基本信息
@@ -175,9 +204,10 @@ class MarketDataService:
             return cached
 
         try:
-            df = self.get_stock_history(symbol, market, days=1)
-            if df.empty:
-                return {"error": "无法获取股票数据"}
+            df = self.get_stock_history(symbol, market, days=120)
+            # Fallback to mock history when real data source is unavailable
+            if df.empty and market == "hk" and symbol in self._HK_MOCK_DATA:
+                df = self._generate_mock_history(symbol, market, days=120)
 
             latest = df.iloc[-1]
             prev = df.iloc[-2] if len(df) > 1 else latest
@@ -225,55 +255,64 @@ class MarketDataService:
         except Exception as e:
             return {"error": f"获取股票信息失败: {str(e)}"}
 
+    # 港股 mock 数据（网络受限或数据源不可用时降级展示）
+    _HK_MOCK_DATA = {
+        "00700": {"name": "腾讯控股", "price": 485.2, "change": 6.8, "change_pct": 1.42, "volume": 18543200, "turnover": 8997200000},
+        "09988": {"name": "阿里巴巴", "price": 82.15, "change": 1.25, "change_pct": 1.54, "volume": 34215600, "turnover": 2810600000},
+        "03690": {"name": "美团", "price": 128.5, "change": -2.1, "change_pct": -1.61, "volume": 12874300, "turnover": 1654300000},
+        "01810": {"name": "小米集团", "price": 19.88, "change": 0.32, "change_pct": 1.64, "volume": 45673200, "turnover": 907800000},
+        "01299": {"name": "友邦保险", "price": 58.75, "change": 0.45, "change_pct": 0.77, "volume": 5643200, "turnover": 331500000},
+        "02318": {"name": "中国平安", "price": 41.35, "change": -0.25, "change_pct": -0.60, "volume": 9876500, "turnover": 408400000},
+        "00883": {"name": "中国海洋石油", "price": 17.42, "change": 0.18, "change_pct": 1.04, "volume": 123456000, "turnover": 2150600000},
+        "00941": {"name": "中国移动", "price": 68.9, "change": 0.6, "change_pct": 0.88, "volume": 8234500, "turnover": 567300000},
+    }
+
     def _get_stock_name(self, symbol: str, market: str) -> str:
         """获取股票名称"""
-        # 港股名称映射
-        hk_names = {
-            "00700": "腾讯控股",
-            "03690": "美团",
-            "01810": "小米集团",
-            "09988": "阿里巴巴",
-            "09618": "京东集团",
-            "00005": "汇丰控股",
-            "02331": "李宁",
-            "00883": "中国海洋石油",
-            "02899": "紫金矿业",
-            "00762": "中国联通",
-        }
-
         if market == "hk":
-            return hk_names.get(symbol, f"港股{symbol}")
+            return self._HK_MOCK_DATA.get(symbol, {}).get("name", f"港股{symbol}")
         elif market == "us":
             return f"美股{symbol}"
         else:
             return f"A股{symbol}"
 
     def get_hk_spot(self, limit: int = 20) -> List[Dict]:
-        """获取港股实时行情"""
+        """获取港股实时行情（网络失败时返回 mock 数据保证演示可用）"""
         try:
             df = ak.stock_hk_spot_em()
             stocks = df.head(limit).to_dict(orient="records")
 
-            # 格式化数据
+            # 格式化数据（与前端 StockSpot 接口字段名保持一致）
             formatted = []
             for stock in stocks:
                 formatted.append(
                     {
-                        "symbol": stock.get("代码", ""),
-                        "name": stock.get("名称", ""),
-                        "price": round(float(stock.get("最新价", 0)), 2),
-                        "change": round(float(stock.get("涨跌额", 0)), 2),
-                        "change_pct": round(float(stock.get("涨跌幅", 0)), 2),
-                        "volume": int(stock.get("成交量", 0)),
-                        "turnover": round(float(stock.get("成交额", 0)), 2),
+                        "代码": stock.get("代码", ""),
+                        "名称": stock.get("名称", ""),
+                        "最新价": round(float(stock.get("最新价", 0)), 2),
+                        "涨跌额": round(float(stock.get("涨跌额", 0)), 2),
+                        "涨跌幅": round(float(stock.get("涨跌幅", 0)), 2),
+                        "成交量": int(stock.get("成交量", 0)),
+                        "成交额": round(float(stock.get("成交额", 0)), 2),
                     }
                 )
 
             return formatted
 
         except Exception as e:
-            logger.warning(f"获取港股行情失败: {e}")
-            return []
+            logger.warning(f"获取港股行情失败，使用 mock 数据: {e}")
+            return [
+                {
+                    "代码": code,
+                    "名称": data["name"],
+                    "最新价": data["price"],
+                    "涨跌额": data["change"],
+                    "涨跌幅": data["change_pct"],
+                    "成交量": data["volume"],
+                    "成交额": data["turnover"],
+                }
+                for code, data in self._HK_MOCK_DATA.items()
+            ]
 
     def get_us_spot(self, limit: int = 20) -> List[Dict]:
         """获取美股实时行情"""
