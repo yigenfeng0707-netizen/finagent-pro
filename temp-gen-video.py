@@ -26,14 +26,16 @@ for i, (img, text) in enumerate(slides):
     )
     filter_parts.append(draw)
 
-# Build xfade chain
+# Build xfade chain; offset must start one second before the previous output ends.
 chain = []
 prev = 'v0'
+prev_duration = DURATION
 for i in range(1, len(slides)):
-    offset = i * DURATION - 1
+    offset = prev_duration - 1
     out = f'x{i-1}' if i < len(slides)-1 else 'outv'
     chain.append(f"[{prev}][v{i}]xfade=transition=fade:duration=1:offset={offset}[{out}]")
     prev = f'x{i-1}'
+    prev_duration = offset + DURATION  # = prev_duration + DURATION - 1
 
 filter_complex = ';'.join(filter_parts + chain)
 cmd = [
